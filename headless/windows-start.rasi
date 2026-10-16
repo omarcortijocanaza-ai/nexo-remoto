@@ -1,0 +1,205 @@
+/* NEXO · menú Inicio.
+ *
+ * Se abre con el botón Inicio, con Buscar, con la tecla Windows y con
+ * Windows+S. Además de las aplicaciones ofrece pestañas para Ejecutar,
+ * las ventanas abiertas y los archivos personales, de modo que la tecla
+ * Windows sea una única puerta a todo, como en Windows 11.
+ */
+
+@import "windows-colors.rasi"
+
+configuration {
+    modes: "drun,run,window,filebrowser";
+    show-icons: true;
+    icon-theme: "Papirus-Dark";
+    terminal: "kitty";
+    sidebar-mode: true;
+    click-to-exit: true;
+    hover-select: true;
+    cycle: true;
+    sort: true;
+    sorting-method: "fzf";
+    matching: "fuzzy";
+    drun-display-format: "{name}";
+    drun-show-actions: false;
+    window-format: "{c}   {t}";
+    display-drun: "Aplicaciones";
+    display-run: "Ejecutar";
+    display-window: "Ventanas";
+    display-filebrowser: "Archivos";
+}
+
+* {
+    font:             @nx-font;
+    background:       @nx-transparent;
+    background-color: @nx-transparent;
+    foreground:       @nx-text;
+    text-color:       @nx-text;
+}
+
+window {
+    width:            820px;
+    height:           680px;
+    location:         south;
+    anchor:           south;
+    x-offset:         0px;
+    y-offset:         -56px;
+    background-color: @nx-panel;
+    border:           1px;
+    border-color:     @nx-line;
+    border-radius:    14px;
+    padding:          18px;
+    children:         [ mainbox ];
+}
+
+mainbox {
+    children: [ inputbar, listview, textbox-hints, mode-switcher ];
+    spacing:  14px;
+}
+
+/* Buscador: pastilla elevada, como el cuadro de búsqueda de Windows 11. */
+inputbar {
+    background-color: @nx-layer;
+    border:           1px;
+    border-color:     @nx-line;
+    border-radius:    10px;
+    padding:          12px 14px;
+    spacing:          10px;
+    children:         [ prompt, entry, num-filtered-rows, textbox-num-sep, num-rows ];
+}
+
+prompt {
+    text-color:       @nx-accent;
+    vertical-align:   0.5;
+}
+
+entry {
+    placeholder:       "Escribe para buscar aplicaciones, archivos o comandos";
+    placeholder-color: @nx-text-faint;
+    cursor:            text;
+    vertical-align:    0.5;
+}
+
+num-filtered-rows,
+num-rows,
+textbox-num-sep {
+    text-color:     @nx-text-faint;
+    vertical-align: 0.5;
+}
+
+textbox-num-sep {
+    expand:  false;
+    str:     "/";
+}
+
+/* Cuadrícula de iconos: cuatro columnas, como la lista de aplicaciones ancladas. */
+listview {
+    columns:      4;
+    lines:        4;
+    fixed-height: true;
+    cycle:        true;
+    scrollbar:    true;
+    spacing:      8px;
+    padding:      0px;
+}
+
+scrollbar {
+    handle-width:      5px;
+    handle-color:      @nx-accent-line;
+    background-color:  @nx-layer-soft;
+    border-radius:     4px;
+    margin:            0 0 0 8px;
+}
+
+element {
+    orientation:   vertical;
+    padding:       16px 10px;
+    spacing:       10px;
+    border:        1px;
+    border-color:  @nx-transparent;
+    border-radius: 10px;
+    cursor:        pointer;
+}
+
+/* Resaltado suave con borde de acento en lugar de un bloque de color pleno:
+ * con hover-select el puntero recorre la cuadrícula constantemente y un relleno
+ * saturado cansa la vista y tapa el icono. */
+element selected,
+element selected.normal {
+    background-color: @nx-accent-fill;
+    border-color:     @nx-accent-line;
+    text-color:       @nx-text;
+}
+
+element alternate.normal {
+    background-color: @nx-transparent;
+}
+
+element urgent {
+    background-color: @nx-danger-fill;
+    text-color:       @nx-text;
+}
+
+element-icon {
+    size:             42px;
+    horizontal-align: 0.5;
+    background-color: @nx-transparent;
+    cursor:           inherit;
+}
+
+element-text {
+    horizontal-align: 0.5;
+    vertical-align:   0.5;
+    ellipsize:        "end";
+    text-color:       inherit;
+    background-color: @nx-transparent;
+    cursor:           inherit;
+}
+
+/* Pistas de teclado permanentes: lo que en Windows se aprende por costumbre,
+ * aquí se enseña, porque la sesión se usa sobre todo desde el celular. */
+textbox-hints {
+    expand:           false;
+    str:              "Enter abre  ·  Esc cierra  ·  Ctrl+Tab cambia de sección  ·  clic en las pestañas de abajo";
+    text-color:       @nx-text-faint;
+    font:             @nx-font-small;
+    horizontal-align: 0.5;
+    padding:          2px 0px;
+}
+
+/* Pestañas: Aplicaciones · Ejecutar · Ventanas · Archivos. */
+mode-switcher {
+    spacing: 8px;
+}
+
+button {
+    padding:          10px 12px;
+    border:           1px;
+    border-color:     @nx-line;
+    border-radius:    9px;
+    background-color: @nx-layer-soft;
+    text-color:       @nx-text-dim;
+    cursor:           pointer;
+}
+
+button selected {
+    background-color: @nx-accent-fill;
+    border-color:     @nx-accent-line;
+    text-color:       @nx-accent;
+}
+
+error-message {
+    background-color: @nx-panel-solid;
+    border-radius:    10px;
+    padding:          14px;
+}
+
+message {
+    background-color: @nx-layer;
+    border-radius:    10px;
+    padding:          10px 14px;
+}
+
+textbox {
+    text-color: @nx-text-dim;
+}

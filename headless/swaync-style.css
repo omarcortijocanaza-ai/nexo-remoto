@@ -1,0 +1,102 @@
+/* NEXO · avisos y centro de notificaciones.
+ *
+ * Mismos colores que el menú Inicio y las barras. Los avisos salen abajo a la
+ * derecha, encima de la barra de tareas, que es donde Windows los pone; antes
+ * heredaban el tema personal de la sesión principal y aparecían arriba. */
+
+@define-color panel   rgba(15, 19, 28, 0.96);
+@define-color card    rgba(27, 34, 49, 0.96);
+@define-color surface rgba(255, 255, 255, 0.07);
+@define-color hover   rgba(255, 255, 255, 0.12);
+@define-color accent  #5cd8f0;
+@define-color line    rgba(255, 255, 255, 0.12);
+@define-color text    #edf2f8;
+@define-color muted   #a2adc0;
+@define-color danger  #ff5c72;
+
+* {
+    font-family: "Segoe UI", "Noto Sans", sans-serif;
+    font-size: 13px;
+    box-shadow: none;
+}
+
+/* --- avisos sueltos ---------------------------------------------------- */
+
+.notification-row { outline: none; }
+
+.notification {
+    background: @card;
+    border: 1px solid @line;
+    border-radius: 10px;
+    margin: 6px 8px;
+    padding: 0;
+}
+
+.notification-content {
+    padding: 12px;
+    color: @text;
+}
+
+.notification.critical { border-color: @danger; }
+.notification .summary { color: @text; font-weight: 600; font-size: 13px; }
+.notification .time { color: @muted; font-size: 11px; }
+.notification .body { color: @muted; font-size: 12px; }
+
+.notification .close-button {
+    background: transparent;
+    color: @muted;
+    border-radius: 6px;
+    margin: 6px;
+    padding: 2px;
+}
+
+.notification .close-button:hover { background: @danger; color: #12161f; }
+
+.notification-action,
+.notification-default-action { background: transparent; border-radius: 10px; }
+.notification-action:hover { background: @hover; }
+
+/* --- centro de notificaciones ------------------------------------------ */
+
+.control-center {
+    background: @panel;
+    border: 1px solid @line;
+    border-radius: 12px;
+    padding: 10px;
+}
+
+.control-center .notification { background: @surface; }
+
+.widget-title {
+    color: @text;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 6px 8px 10px 8px;
+}
+
+.widget-title > button {
+    background: @surface;
+    border: 1px solid @line;
+    border-radius: 8px;
+    color: @muted;
+    padding: 5px 12px;
+    font-size: 12px;
+}
+
+.widget-title > button:hover { background: @hover; color: @text; }
+
+.widget-dnd {
+    background: @surface;
+    border: 1px solid @line;
+    border-radius: 8px;
+    color: @text;
+    padding: 8px 12px;
+    margin: 0 8px 8px 8px;
+    font-size: 13px;
+}
+
+.widget-dnd > switch { background: rgba(255, 255, 255, 0.16); border-radius: 12px; }
+.widget-dnd > switch:checked { background: @accent; }
+
+.floating-notifications { background: transparent; }
+.blank-window { background: transparent; }

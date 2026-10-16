@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -u
+
+# Menú Inicio. Se abre desde el botón, desde Buscar, con la tecla Windows,
+# con Windows+S y con Windows+Q.
+#
+# `-no-config` es deliberado: el tema de la sesión NEXO no debe mezclarse nunca
+# con un `config.rasi` personal. Sin él, un archivo suelto en el hogar del
+# usuario `nexo` bastaría para cambiar colores, fuente y geometría del menú.
+#
+# El título de ventana identifica al menú para que Hyprland lo coloque encima
+# de la barra de tareas; los demás diálogos quedan centrados.
+
+MODE=${1:-drun}
+case "$MODE" in
+  drun|run|window|filebrowser) ;;
+  *) MODE=drun ;;
+esac
+
+# Sin `-normal-window`: rofi se dibuja como capa, que es su modo nativo en
+# Wayland. Con ventana normal el clic sobre una casilla cerraba el menú sin
+# abrir nada. En capa, y con puntero virtual —el mismo camino que usa el cliente
+# remoto—, el clic simple abre lo que está bajo el cursor; se comprobó con clics
+# sintéticos sobre casillas concretas. El doble clic vale también, por si el
+# cliente envía el clic sin movimiento previo.
+exec rofi -no-config -show "$MODE" \
+  -theme /etc/nexo/windows-start.rasi \
+  -show-icons -icon-theme 'Papirus-Dark' \
+  -window-title 'NEXO Inicio' \
+  -click-to-exit -hover-select \
+  -me-select-entry '' -me-accept-entry 'MousePrimary,MouseDPrimary'

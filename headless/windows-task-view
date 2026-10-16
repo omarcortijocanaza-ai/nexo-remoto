@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -u
+
+# Vista de tareas. Lista las ventanas abiertas, incluidas las minimizadas, que
+# en Hyprland viven en un espacio especial y no aparecerían de otro modo.
+
+count=$(hyprctl -j clients 2>/dev/null | jq '[.[] | select(.mapped==true)] | length' 2>/dev/null || echo 0)
+case "$count" in
+  0) mesg='No hay ventanas abiertas. Usa Inicio para abrir una aplicación.' ;;
+  1) mesg='1 ventana abierta · Enter la activa · Shift+Supr la cierra' ;;
+  *) mesg="$count ventanas abiertas · Enter activa · Shift+Supr cierra" ;;
+esac
+
+# Sin `-normal-window`: rofi se dibuja como capa, que es su modo nativo en
+# Wayland. Con ventana normal el clic sobre una casilla cerraba el menú sin
+# abrir nada. En capa, y con puntero virtual —el mismo camino que usa el cliente
+# remoto—, el clic simple abre lo que está bajo el cursor; se comprobó con clics
+# sintéticos sobre casillas concretas. El doble clic vale también, por si el
+# cliente envía el clic sin movimiento previo.
+exec rofi -no-config -show window \
+  -theme /etc/nexo/windows-dialog.rasi \
+  -show-icons -icon-theme 'Papirus-Dark' \
+  -window-title 'NEXO Vista de tareas' \
+  -display-window 'Ventanas abiertas' -mesg "$mesg" \
+  -matching fuzzy -click-to-exit -hover-select \
+  -me-select-entry '' -me-accept-entry 'MousePrimary,MouseDPrimary'

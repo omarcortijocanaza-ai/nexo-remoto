@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+HOST_USER=${NEXO_HOST_USER:-Letzus}
+HOST_UID=${NEXO_HOST_UID:-1000}
+REMOTE_USER=${NEXO_REMOTE_USER:-nexo}
+STATE_DIR=${NEXO_STATE_DIR:-/var/lib/nexo-session}
+PARENT_ENV=${NEXO_PARENT_ENV:-$STATE_DIR/parent-wayland.env}
+HOST_OUTPUT=${NEXO_HOST_OUTPUT:-Virtual-1}
+HOST_WORKSPACE=${NEXO_HOST_WORKSPACE:-11}
+HOST_RUNTIME=/run/user/$HOST_UID
+
+run_host() {
+  /usr/bin/runuser -u "$HOST_USER" -- env \
+    XDG_RUNTIME_DIR="$HOST_RUNTIME" \
+    WAYLAND_DISPLAY="$WAYLAND_NAME" \
+    HYPRLAND_INSTANCE_SIGNATURE="$HYPR_SIGNATURE" \
+    "$@"
+}
+
+find_parent() {
+  local instances
+  instances=$(/usr/bin/runuser -u "$HOST_USER" -- env XDG_RUNTIME_DIR="$HOST_RUNTIME" \
+    hyprctl instances -j 2>/dev/null) || return 1
+  HYPR_SIGNATURE=$(jq -r 'max_by(.time) | .instance // empty' <<<"$instances")
+  WAYLAND_NAME=$(jq -r 'max_by(.time) | .wl_socket // empty' <<<"$instances")
+  [ -n "$WAYLAND_NAME" ] && [ -n "$HYPR_SIGNATURE" ] || return 1
+  case "$WAYLAND_NAME" in /*) PARENT_SOCKET=$WAYLAND_NAME ;; *) PARENT_SOCKET=$HOST_RUNTIME/$WAYLAND_NAME ;; esac
+  [ -S "$PARENT_SOCKET" ]
+}
+
+for _ in $(seq 1 90); do
+  find_parent && break
+  sleep 1
+done
+find_parent || { printf 'Nexo: no se encontró una sesión Hyprland anfitriona para %s.\n' "$HOST_USER" >&2; exit 1; }
+
+setfacl -m "u:$REMOTE_USER:x" "$HOST_RUNTIME"
+setfacl -m "u:$REMOTE_USER:rw" "$PARENT_SOCKET"
+
+if ! run_host hyprctl -j monitors all | jq -e --arg name "$HOST_OUTPUT" '.[] | select(.name == $name)' >/dev/null; then
+  HOST_OUTPUT=NEXO-HOST
+  run_host hyprctl output create headless "$HOST_OUTPUT" >/dev/null
+  CREATED_OUTPUT=1
+else
+  CREATED_OUTPUT=0
+fi
+
+run_host hyprctl keyword monitor "$HOST_OUTPUT,1920x1080@60,auto-right,1" >/dev/null
+run_host hyprctl eval "hl.dispatch(hl.dsp.workspace.move({ workspace = \"$HOST_WORKSPACE\", monitor = \"$HOST_OUTPUT\" }))" >/dev/null || true
+HOST_FOCUS=$(run_host hyprctl -j activewindow | jq -r '.address // empty')
+
+install -o "$REMOTE_USER" -g "$REMOTE_USER" -m 0600 /dev/null "$PARENT_ENV"
+printf 'WAYLAND_DISPLAY=%s\nHYPRLAND_INSTANCE_SIGNATURE=%s\nHOST_OUTPUT=%s\nHOST_WORKSPACE=%s\nHOST_FOCUS=%s\nCREATED_OUTPUT=%s\n' \
+  "$PARENT_SOCKET" "$HYPR_SIGNATURE" "$HOST_OUTPUT" "$HOST_WORKSPACE" "$HOST_FOCUS" "$CREATED_OUTPUT" >"$PARENT_ENV"
+chown "$REMOTE_USER:$REMOTE_USER" "$PARENT_ENV"
+chmod 0600 "$PARENT_ENV"

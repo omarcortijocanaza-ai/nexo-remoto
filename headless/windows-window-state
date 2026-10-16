@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -u
+
+window=$(hyprctl -j activewindow 2>/dev/null) || window='{}'
+address=$(jq -r '.address // empty' <<<"$window")
+fullscreen=$(jq -r '.fullscreen // 0' <<<"$window")
+
+if [ -z "$address" ]; then
+  jq -cn '{text:"□",tooltip:"No hay una ventana activa",class:["inactive"]}'
+elif [ "$fullscreen" -gt 0 ]; then
+  jq -cn '{text:"❐",tooltip:"Restaurar ventana",class:["maximized"]}'
+else
+  jq -cn '{text:"□",tooltip:"Maximizar ventana",class:["normal"]}'
+fi

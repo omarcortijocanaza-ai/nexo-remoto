@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -u
+
+# Cuadro Ejecutar (Windows+R).
+
+# Sin `-normal-window`: rofi se dibuja como capa, que es su modo nativo en
+# Wayland. Con ventana normal el clic sobre una casilla cerraba el menú sin
+# abrir nada. En capa, y con puntero virtual —el mismo camino que usa el cliente
+# remoto—, el clic simple abre lo que está bajo el cursor; se comprobó con clics
+# sintéticos sobre casillas concretas. El doble clic vale también, por si el
+# cliente envía el clic sin movimiento previo.
+exec rofi -no-config -modes run -show run \
+  -theme /etc/nexo/windows-dialog.rasi \
+  -show-icons -icon-theme 'Papirus-Dark' \
+  -window-title 'NEXO Ejecutar' \
+  -display-run 'Ejecutar' -run-command '{cmd}' \
+  -mesg 'Escribe un programa y pulsa Enter · Shift+Enter lo abre en la Terminal' \
+  -click-to-exit -hover-select

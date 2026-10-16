@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -u
+
+for _ in $(seq 1 80); do
+  curl -fsS --max-time 1 http://127.0.0.1:8766/health >/dev/null 2>&1 && exit 0
+  sleep 0.25
+done
+
+printf 'Nexo: Hyprland inició, pero el agente no abrió el puerto 8766 a tiempo.\n' >&2
+exit 1

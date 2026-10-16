@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+set -u
+
+# Fondo de pantalla, como «Personalización › Fondo» de Windows.
+#
+#   windows-wallpaper            elegir imagen
+#   windows-wallpaper apply      aplicar el fondo guardado (lo usa el arranque)
+#
+# La elección se guarda para que sobreviva a un reinicio de la sesión; sin eso
+# habría que editar la configuración de Hyprland para cambiar de fondo.
+
+NX_LIB=$(dirname -- "${BASH_SOURCE[0]}")
+# shellcheck source=/dev/null
+. "$NX_LIB/windows-menu-lib"
+
+# JPEG y no WebP: Qt no lee WebP sin `qt6-imageformats`, y el escritorio de
+# pcmanfm-qt dibuja esta misma imagen encima del fondo de awww.
+DEFAULT=/opt/nexo/assets/viego-wallpaper.jpg
+STATE=${XDG_CONFIG_HOME:-$HOME/.config}/nexo-wallpaper
+BROWSE_LABEL='Elegir otra imagen…'
+
+PCMANFM_SETTINGS=${XDG_CONFIG_HOME:-$HOME/.config}/pcmanfm-qt/nexo/settings.conf
+
+apply() {
+  local image=$1 transition=${2:-fade}
+  [ -f "$image" ] || image=$DEFAULT
+  # `crop` conserva la proporción y recorta lo que sobra. Sin fijarlo, una
+  # imagen más ancha que la pantalla saldría estirada.
+  awww img "$image" --resize crop \
+    --transition-type "$transition" --transition-duration 1 >/dev/null 2>&1
+
+  # Si hay iconos de escritorio, su capa tapa el fondo de awww: hay que
+  # cambiarle la imagen también, o el fondo elegido no se vería.
+  if [ -f "$PCMANFM_SETTINGS" ]; then
+    sed -i "s|^Wallpaper=.*|Wallpaper=$image|" "$PCMANFM_SETTINGS"
+  fi
+  if pgrep -x pcmanfm-qt >/dev/null 2>&1; then
+    pcmanfm-qt --profile=nexo --set-wallpaper="$image" --wallpaper-mode=zoom >/dev/null 2>&1
+  fi
+}
+
+saved() {
+  [ -s "$STATE" ] && head -1 "$STATE" || printf '%s' "$DEFAULT"
+}
+
+case "${1:-}" in
+  apply)
+    # Al arrancar se aplica dos veces: la primera puede caer sobre una
+    # geometría provisional de WAYLAND-1 y saldría escalada contra el tamaño
+    # equivocado.
+    if [ "${2:-}" = --settle ]; then
+      apply "$(saved)" none
+    else
+      apply "$(saved)" fade
+    fi
+    exit 0
+    ;;
+esac
+
+current=$(saved)
+mapfile -t images < <(
+  find "$HOME/Imágenes" "$HOME/Descargas" /opt/nexo/assets \
+    -maxdepth 2 -type f \
+    \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) \
+    2>/dev/null | sort | head -40
+)
+
+choice=$(
+  {
+    for image in "${images[@]}"; do
+      label=$(basename "$image")
+      [ "$image" = "$current" ] && label="$label · actual"
+      nx_row "$label" "$image"
+    done
+    nx_row "$BROWSE_LABEL" folder-pictures
+  } | nx_menu 'Fondo de pantalla' \
+      'Las imágenes salen de Imágenes, Descargas y las incluidas con NEXO.' \
+      'NEXO Fondo'
+) || exit 0
+
+[ -n "$choice" ] || exit 0
+
+if [ "$choice" = "$BROWSE_LABEL" ]; then
+  selected=$(zenity --file-selection --title='Elegir imagen de fondo' \
+    --file-filter='Imágenes | *.jpg *.jpeg *.png *.webp' 2>/dev/null) || exit 0
+else
+  selected=''
+  for image in "${images[@]}"; do
+    label=$(basename "$image")
+    if [ "$choice" = "$label" ] || [ "$choice" = "$label · actual" ]; then
+      selected=$image
+      break
+    fi
+  done
+fi
+
+[ -n "$selected" ] && [ -f "$selected" ] || exit 0
+
+printf '%s\n' "$selected" >"$STATE"
+apply "$selected" fade
+nx_notify 'Fondo de pantalla' "$(basename "$selected")" preferences-desktop-theme

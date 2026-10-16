@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -u
+
+# Bienvenida. Se muestra una vez por versión del texto; `--always` la reabre
+# desde la configuración rápida. El marcador lleva versión para que una guía
+# ampliada vuelva a mostrarse una sola vez tras actualizar.
+
+MARKER=${XDG_STATE_HOME:-$HOME/.local/state}/nexo-windows-welcome-v2
+[ "${1:-}" = --always ] || [ ! -e "$MARKER" ] || exit 0
+mkdir -p "$(dirname "$MARKER")"
+touch "$MARKER"
+
+zenity --info --title='Bienvenido a NEXO' --width=620 --ok-label='Comenzar' \
+  --text='<big><b>Tu escritorio NEXO está listo</b></big>
+
+<b>Abrir cosas</b>
+• La tecla <b>Windows</b> abre Inicio: aplicaciones, Ejecutar, ventanas y archivos en pestañas.
+• <b>Windows+E</b> el Explorador, <b>Windows+R</b> Ejecutar, <b>Windows+1/2/3</b> lo anclado en la barra.
+
+<b>Ventanas</b>
+• Arriba están el nombre de la aplicación y los controles <b>◧ ◨ − □ ×</b>.
+• <b>Windows+Flechas</b> acomoda; con <b>Shift</b>, a un cuarto de pantalla.
+• <b>Alt+Tab</b> cambia, <b>Alt+F4</b> cierra y <b>Alt+Espacio</b> abre las acciones de la ventana.
+
+<b>Novedades</b>
+• <b>Windows+V</b>: historial del portapapeles, para recuperar lo que copiaste antes.
+• <b>Windows+Shift+S</b>: recortar la pantalla; <b>Impr Pant</b> la captura entera.
+• <b>Windows+I</b>: configuración rápida de sonido, red, avisos y ayuda.
+• <b>Windows+Ctrl+Flechas</b>: cambiar de escritorio virtual; hay cuatro en la barra.
+• <b>Windows+/</b>: lista buscable de todos los atajos.
+• <b>Clic derecho sobre el fondo</b>: menú del escritorio, con fondo de pantalla y nueva carpeta.
+• En la Terminal, <b>Ctrl+C</b> copia si hay texto seleccionado y <b>Ctrl+V</b> pega.
+• El <b>Escritorio</b> muestra sus iconos: lo que dejes ahí aparece en el fondo.
+
+Esta sesión es independiente: no puede ver los archivos privados de la sesión principal.' \
+  >/dev/null 2>&1 || true

@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -u
+
+HOST_USER=${NEXO_HOST_USER:-Letzus}
+HOST_UID=${NEXO_HOST_UID:-1000}
+REMOTE_USER=${NEXO_REMOTE_USER:-nexo}
+PARENT_ENV=${NEXO_PARENT_ENV:-/var/lib/nexo-session/parent-wayland.env}
+HOST_RUNTIME=/run/user/$HOST_UID
+[ -r "$PARENT_ENV" ] || exit 0
+value() { sed -n "s/^$1=//p" "$PARENT_ENV" | head -n 1; }
+PARENT_SOCKET=$(value WAYLAND_DISPLAY)
+HYPR_SIGNATURE=$(value HYPRLAND_INSTANCE_SIGNATURE)
+HOST_OUTPUT=$(value HOST_OUTPUT)
+CREATED_OUTPUT=$(value CREATED_OUTPUT)
+WAYLAND_NAME=${PARENT_SOCKET##*/}
+
+if [ "$CREATED_OUTPUT" = 1 ] && [ -n "$HYPR_SIGNATURE" ]; then
+  /usr/bin/runuser -u "$HOST_USER" -- env XDG_RUNTIME_DIR="$HOST_RUNTIME" \
+    WAYLAND_DISPLAY="$WAYLAND_NAME" HYPRLAND_INSTANCE_SIGNATURE="$HYPR_SIGNATURE" \
+    hyprctl output remove "$HOST_OUTPUT" >/dev/null 2>&1 || true
+fi
+setfacl -x "u:$REMOTE_USER" "$PARENT_SOCKET" 2>/dev/null || true
+setfacl -x "u:$REMOTE_USER" "$HOST_RUNTIME" 2>/dev/null || true
+rm -f "$PARENT_ENV"

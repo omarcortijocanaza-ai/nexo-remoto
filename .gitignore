@@ -1,0 +1,28 @@
+# Dependencias: se instalan con `npm ci` en cada máquina
+node_modules/
+
+# Estado privado de NEXO: token, hash de contraseña, dispositivos emparejados,
+# código de emparejamiento, perfil y monitor. NUNCA al repositorio.
+.nexo-*.json
+.nexo-files/
+.nexo-launcher.pid
+.nexo-pids.json
+.traza-teclado
+nexo-access.log*
+nexo-runtime.log*
+*.log
+
+# Binarios generados o descargados: se recompilan (Go) o se descargan con
+# verificación SHA-256 en cada sistema. wlrctl sí se versiona (Linux, MIT,
+# revisión fijada en THIRD_PARTY_NOTICES.md).
+bin/cloudflared
+bin/cloudflared.exe
+bin/nexo-gpu-webrtc
+bin/win/
+windows-helper/dist/
+*.exe
+
+# Certificados locales (fase HTTPS LAN)
+*.pfx
+*.pem
+*.key

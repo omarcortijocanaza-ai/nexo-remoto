@@ -1,0 +1,12 @@
+[General]
+BrowseThroughArchives=true
+ShowFullPath=true
+
+[DetailsMode]
+ExpandableFolders=false
+
+[MainWindow]
+MenuBar=Enabled
+
+[PlacesPanel]
+IconSize=32

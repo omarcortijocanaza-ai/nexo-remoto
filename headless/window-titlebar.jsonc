@@ -1,0 +1,49 @@
+{
+    "layer": "top",
+    "name": "top",
+    "position": "top",
+    "height": 40,
+    "exclusive": true,
+    "fixed-center": true,
+    "modules-left": ["custom/window-app", "hyprland/window"],
+    "modules-center": [],
+    "modules-right": ["custom/window-snap-left", "custom/window-snap-right", "custom/window-minimize", "custom/window-maximize", "custom/window-close"],
+    "custom/window-app": {
+        "return-type": "json",
+        "exec": "/usr/local/lib/nexo/windows-active-app",
+        "interval": 1,
+        "on-click": "/usr/local/lib/nexo/windows-window-menu"
+    },
+    "hyprland/window": {
+        "format": "{title}",
+        "max-length": 100,
+        "separate-outputs": true,
+        "rewrite": {"^$": "Escritorio"}
+    },
+    "custom/window-snap-left": {
+        "format": "◧",
+        "tooltip-format": "Acomodar a la mitad izquierda (Windows+Izquierda)",
+        "on-click": "/usr/local/lib/nexo/windows-window-action snap-left"
+    },
+    "custom/window-snap-right": {
+        "format": "◨",
+        "tooltip-format": "Acomodar a la mitad derecha (Windows+Derecha)",
+        "on-click": "/usr/local/lib/nexo/windows-window-action snap-right"
+    },
+    "custom/window-minimize": {
+        "format": "−",
+        "tooltip-format": "Minimizar ventana · se recupera desde la barra de tareas",
+        "on-click": "/usr/local/lib/nexo/windows-window-action minimize"
+    },
+    "custom/window-maximize": {
+        "return-type": "json",
+        "exec": "/usr/local/lib/nexo/windows-window-state",
+        "interval": 1,
+        "on-click": "/usr/local/lib/nexo/windows-window-action maximize"
+    },
+    "custom/window-close": {
+        "format": "×",
+        "tooltip-format": "Cerrar ventana (Alt+F4)",
+        "on-click": "/usr/local/lib/nexo/windows-window-action close"
+    }
+}

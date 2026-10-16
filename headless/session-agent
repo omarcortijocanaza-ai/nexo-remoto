@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+STATE_DIR=${NEXO_STATE_DIR:-/var/lib/nexo-session}
+LOG_FILE="$STATE_DIR/nexo-runtime.log"
+
+mkdir -p "$STATE_DIR"
+touch "$LOG_FILE"
+chmod 0640 "$LOG_FILE"
+
+# Un reinicio solapado llegó a dejar dos agentes completos (PipeWire, launcher
+# y aplicaciones de escritorio) compitiendo por el puerto 8766. El segundo no
+# podía servir clientes, pero sí consumía recursos y reintentaba para siempre.
+# Mantener el descriptor abierto durante toda la vida del agente garantiza una
+# única pila NEXO. Si la anterior aún termina, systemd espera aquí sin duplicar
+# procesos ni llenar el registro.
+exec 9>"$STATE_DIR/.runtime.lock"
+if ! flock -n 9; then
+  printf 'NEXO: otro runtime sigue cerrándose; esperando el bloqueo exclusivo.\n' >>"$LOG_FILE"
+  flock 9
+fi
+
+# Este runtime pertenece exclusivamente al escritorio NEXO. Un reinicio puede
+# dejar sockets sin proceso propietario y hacer que pipewire-pulse termine con
+# "El fichero ya existe", dejando video funcional pero audio completamente
+# mudo. Limpiarlos antes de levantar el nuevo servidor es seguro dentro de este
+# runtime privado y evita depender de un reinicio de toda la computadora.
+case "${XDG_RUNTIME_DIR:-}" in
+  /run/nexo-session)
+    rm -rf -- "$XDG_RUNTIME_DIR/pulse"
+    rm -f -- "$XDG_RUNTIME_DIR/pipewire-0" "$XDG_RUNTIME_DIR/pipewire-0.lock"
+    ;;
+  *)
+    printf 'Runtime de audio NEXO inesperado: %s\n' "${XDG_RUNTIME_DIR:-vacío}" >>"$LOG_FILE"
+    exit 1
+    ;;
+esac
+
+# Perfil familiar para usuarios de Windows: carpetas conocidas en español,
+# asociaciones previsibles y doble clic configurado por KDE.
+mkdir -p "$HOME/Escritorio" "$HOME/Documentos" "$HOME/Descargas" \
+  "$HOME/Imágenes" "$HOME/Música" "$HOME/Vídeos" "$HOME/.config" "$HOME/.local/state"
+xdg-user-dirs-update --set DESKTOP "$HOME/Escritorio" >/dev/null 2>&1 || true
+xdg-user-dirs-update --set DOCUMENTS "$HOME/Documentos" >/dev/null 2>&1 || true
+xdg-user-dirs-update --set DOWNLOAD "$HOME/Descargas" >/dev/null 2>&1 || true
+xdg-user-dirs-update --set PICTURES "$HOME/Imágenes" >/dev/null 2>&1 || true
+xdg-user-dirs-update --set MUSIC "$HOME/Música" >/dev/null 2>&1 || true
+xdg-user-dirs-update --set VIDEOS "$HOME/Vídeos" >/dev/null 2>&1 || true
+xdg-mime default firefox.desktop x-scheme-handler/http >/dev/null 2>&1 || true
+xdg-mime default firefox.desktop x-scheme-handler/https >/dev/null 2>&1 || true
+xdg-mime default org.kde.dolphin.desktop inode/directory >/dev/null 2>&1 || true
+
+pipewire >>"$LOG_FILE" 2>&1 &
+PIPEWIRE_PID=$!
+for _ in $(seq 1 30); do
+  [ -S "$XDG_RUNTIME_DIR/pipewire-0" ] && break
+  kill -0 "$PIPEWIRE_PID" 2>/dev/null || break
+  sleep 0.1
+done
+pipewire-pulse >>"$LOG_FILE" 2>&1 &
+PULSE_PID=$!
+wireplumber >>"$LOG_FILE" 2>&1 &
+WIREPLUMBER_PID=$!
+
+cleanup() {
+  kill -TERM "$WIREPLUMBER_PID" "$PULSE_PID" "$PIPEWIRE_PID" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+for _ in $(seq 1 30); do
+  pactl info >/dev/null 2>&1 && break
+  sleep 0.2
+done
+
+if pactl info >/dev/null 2>&1; then
+  pactl load-module module-null-sink sink_name=nexo_virtual \
+    sink_properties=device.description=Nexo_Remoto >>"$LOG_FILE" 2>&1 || true
+  pactl set-default-sink nexo_virtual >>"$LOG_FILE" 2>&1 || true
+else
+  printf 'NEXO: pipewire-pulse no respondió; el audio remoto no está disponible.\n' >>"$LOG_FILE"
+fi
+
+export NEXO_MODE=${NEXO_MODE:-remote}
+export NEXO_MONITOR=${NEXO_MONITOR:-Virtual-1}
+export NEXO_STATE_DIR="$STATE_DIR"
+export NEXO_STATE_MODE=${NEXO_STATE_MODE:-640}
+export REMOTE_KEYBOARD_PORT=${REMOTE_KEYBOARD_PORT:-8766}
+export NEXO_GPU=${NEXO_GPU:-0}
+
+/usr/bin/node /opt/nexo/launcher.js >>"$LOG_FILE" 2>&1 &
+NEXO_PID=$!
+wait "$NEXO_PID"

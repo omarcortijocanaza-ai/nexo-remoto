@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=NEXO · Apagar sesión independiente
+Comment=Cierra el escritorio remoto separado y todas sus aplicaciones
+Exec=/usr/local/bin/nexo-session-control stop
+Icon=system-shutdown
+Terminal=false
+Categories=Network;
+StartupNotify=false

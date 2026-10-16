@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -u
+
+# Menú del escritorio: el que en Windows aparece al hacer clic derecho sobre el
+# fondo. Se llama en cada clic derecho, así que lo primero que hace es
+# comprobar si el clic cayó sobre una ventana o sobre una barra; en ese caso
+# termina sin hacer nada y el clic sigue su camino hacia la aplicación.
+
+NX_LIB=$(dirname -- "${BASH_SOURCE[0]}")
+# shellcheck source=/dev/null
+. "$NX_LIB/windows-menu-lib"
+
+# Si hay iconos de escritorio, manda el menú propio de pcmanfm-qt: es más
+# completo —pegar, ordenar, preferencias— y saldrían los dos a la vez.
+pgrep -x pcmanfm-qt >/dev/null 2>&1 && exit 0
+
+position=$(hyprctl cursorpos 2>/dev/null) || exit 0
+cx=${position%%,*}
+cy=${position##*, }
+case "$cx$cy" in *[!0-9-]*|'') exit 0 ;; esac
+
+read -r MON_H RES_T RES_B < <(
+  hyprctl -j monitors 2>/dev/null |
+    jq -r 'map(select(.focused)) | (.[0] // {}) |
+      "\(.height // 1080) \(.reserved[1] // 0) \(.reserved[3] // 0)"'
+)
+
+# Las barras tienen sus propios menús; no se pisan.
+[ "$cy" -lt "$RES_T" ] && exit 0
+[ "$cy" -ge $((MON_H - RES_B)) ] && exit 0
+
+workspace=$(hyprctl -j activeworkspace 2>/dev/null | jq -r '.id // 1')
+covered=$(hyprctl -j clients 2>/dev/null | jq --argjson x "$cx" --argjson y "$cy" \
+  --argjson ws "$workspace" '[.[] | select(.mapped == true and .workspace.id == $ws
+    and .at[0] <= $x and $x < (.at[0] + .size[0])
+    and .at[1] <= $y and $y < (.at[1] + .size[1]))] | length' 2>/dev/null)
+[ "${covered:-0}" -eq 0 ] || exit 0
+
+DESKTOP="$HOME/Escritorio"
+
+choice=$(
+  {
+    nx_row 'Abrir el Escritorio'      user-desktop
+    nx_row 'Nueva carpeta'            folder-new
+    nx_row 'Abrir la Terminal aquí'   utilities-terminal
+    nx_row 'Fondo de pantalla'        preferences-desktop-theme
+    nx_row 'Configuración rápida'     preferences-system
+    nx_row 'Actualizar'               view-refresh
+  } | nx_menu 'Escritorio' 'Clic derecho sobre el fondo' 'NEXO Escritorio'
+) || exit 0
+
+case "$choice" in
+  'Abrir el Escritorio') mkdir -p "$DESKTOP"; setsid dolphin "$DESKTOP" >/dev/null 2>&1 & ;;
+  'Nueva carpeta')
+    name=$(zenity --entry --title='Nueva carpeta' --width=380 \
+      --text='Nombre de la carpeta:' --entry-text='Nueva carpeta' 2>/dev/null) || exit 0
+    [ -n "$name" ] || exit 0
+    case "$name" in */*) nx_notify 'Nueva carpeta' 'El nombre no puede llevar barras.' dialog-warning; exit 0 ;; esac
+    mkdir -p "$DESKTOP/$name" && nx_notify 'Escritorio' "Carpeta «$name» creada." folder-new
+    ;;
+  'Abrir la Terminal aquí') mkdir -p "$DESKTOP"; setsid kitty --directory "$DESKTOP" >/dev/null 2>&1 & ;;
+  'Fondo de pantalla') exec "$NX_LIB/windows-wallpaper" ;;
+  'Configuración rápida') exec "$NX_LIB/windows-quick-settings" ;;
+  'Actualizar') "$NX_LIB/windows-wallpaper" apply ;;
+esac

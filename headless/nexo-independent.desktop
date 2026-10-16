@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=NEXO · Prender sesión independiente
+Comment=Inicia un escritorio Hyprland separado para acceso remoto
+Exec=/usr/local/bin/nexo-session-control start
+Icon=video-display
+Terminal=false
+Categories=Network;
+StartupNotify=false

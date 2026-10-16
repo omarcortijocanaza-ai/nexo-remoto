@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SOURCE_DIR=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+ACTION=${1:-install}
+case "$ACTION" in
+  install|update) ;;
+  doctor) exec env NEXO_STATE_DIR=/var/lib/nexo-session REMOTE_KEYBOARD_PORT=8766 bash "$SOURCE_DIR/nexo-doctor" ;;
+  uninstall) exec "$SOURCE_DIR/headless/uninstall-headless" ;;
+  *) printf 'Uso: %s {install|update|doctor|uninstall}\n' "$0" >&2; exit 2 ;;
+esac
+
+if [ "$(id -u)" -ne 0 ]; then
+  printf 'Este instalador necesita privilegios. Ejecuta:\n  sudo %q\n' "$0" >&2
+  exit 1
+fi
+
+OWNER=${SUDO_USER:-Letzus}
+
+[ -f "$SOURCE_DIR/launcher.js" ] || { printf 'No se encontró el código de Nexo.\n' >&2; exit 1; }
+[ ! -L /opt/nexo ] || { printf '/opt/nexo no puede ser un enlace simbólico.\n' >&2; exit 1; }
+
+if ! id "$OWNER" >/dev/null 2>&1; then
+  printf 'No existe el usuario local %s. Define SUDO_USER correctamente.\n' "$OWNER" >&2
+  exit 1
+fi
+OWNER_HOME=$(getent passwd "$OWNER" | cut -d: -f6)
+OWNER_GROUP=$(id -gn "$OWNER")
+
+if ! id nexo >/dev/null 2>&1; then
+  useradd --create-home --shell /bin/bash --comment 'Nexo remote desktop' nexo
+fi
+passwd --lock nexo >/dev/null
+usermod -aG video,render nexo
+NEXO_UID=$(id -u nexo)
+
+install -d -o root -g root -m 0755 /opt/nexo /etc/nexo /usr/local/lib/nexo
+install -d -o nexo -g "$OWNER_GROUP" -m 2750 /var/lib/nexo-session
+install -d -o "$OWNER" -g "$OWNER_GROUP" -m 0755 "$OWNER_HOME/.local/share/applications"
+
+# Todos los módulos del proyecto, no una lista escrita a mano: olvidar uno nuevo
+# hacía que el servidor muriera al arrancar por un `require` sin destino, con la
+# sesión reintentando en bucle y dejando ventanas anidadas sueltas.
+install -o root -g root -m 0644 "$SOURCE_DIR"/*.js /opt/nexo/
+install -o root -g root -m 0644 \
+  "$SOURCE_DIR"/index.html "$SOURCE_DIR"/pizarra.html \
+  "$SOURCE_DIR"/package.json "$SOURCE_DIR"/package-lock.json \
+  "$SOURCE_DIR"/README.md "$SOURCE_DIR"/PLAN-SESION-INDEPENDIENTE.md \
+  "$SOURCE_DIR"/PLAN-EXPERIENCIA-WINDOWS.md \
+  "$SOURCE_DIR"/DIAGNOSTICO-TECLADO.md \
+  "$SOURCE_DIR"/THIRD_PARTY_NOTICES.md /opt/nexo/
+
+# Ningún `require` local puede quedar sin archivo: es preferible que el
+# instalador falle aquí, con el mensaje claro, a que la sesión entre en un
+# bucle de reinicios que el usuario descubre por las ventanas que aparecen.
+missing=''
+for source in /opt/nexo/*.js; do
+  while read -r dependency; do
+    target="/opt/nexo/${dependency#./}"
+    [ -f "$target" ] || [ -f "$target.js" ] || missing="$missing $(basename "$source") -> $dependency"
+  done < <(grep -oE "require\('\./[^']+'\)" "$source" | sed "s/require('//;s/')//")
+done
+[ -z "$missing" ] || { printf 'Faltan módulos en /opt/nexo:%s\n' "$missing" >&2; exit 1; }
+
+for directory in assets bin node_modules windows-helper; do
+  rm -rf "/opt/nexo/$directory"
+  cp -a "$SOURCE_DIR/$directory" /opt/nexo/
+  chown -R root:root "/opt/nexo/$directory"
+  chmod -R a-w "/opt/nexo/$directory"
+done
+
+install -o root -g root -m 0644 "$SOURCE_DIR/headless/hyprland.conf" /etc/nexo/hyprland-headless.conf
+install -o root -g root -m 0644 "$SOURCE_DIR/headless/waybar.jsonc" /etc/nexo/waybar.jsonc
+install -o root -g root -m 0644 "$SOURCE_DIR/headless/window-titlebar.jsonc" /etc/nexo/window-titlebar.jsonc
+install -o root -g root -m 0644 "$SOURCE_DIR/headless/windows-waybar.css" /etc/nexo/windows-waybar.css
+install -o root -g root -m 0644 "$SOURCE_DIR/headless/windows-colors.rasi" /etc/nexo/windows-colors.rasi
+install -o root -g root -m 0644 "$SOURCE_DIR/headless/windows-start.rasi" /etc/nexo/windows-start.rasi
+install -o root -g root -m 0644 "$SOURCE_DIR/headless/windows-dialog.rasi" /etc/nexo/windows-dialog.rasi
+
+# Comparte el aspecto del usuario local como una copia segura. No se copian
+# perfiles de navegador, credenciales, documentos ni configuraciones de apps.
+install -d -o nexo -g nexo -m 0755 \
+  /home/nexo/.config/kitty /home/nexo/.config/swaync /home/nexo/.config/waybar \
+  /home/nexo/.config/rofi /home/nexo/.config/themes/rexmortis /home/nexo/.config/gtk-3.0 \
+  /home/nexo/.config/gtk-4.0 /home/nexo/.local/share /home/nexo/.cache \
+  /home/nexo/Escritorio /home/nexo/Documentos /home/nexo/Descargas \
+  /home/nexo/Imágenes /home/nexo/Música /home/nexo/Vídeos
+install -o nexo -g nexo -m 0644 "$SOURCE_DIR/headless/kitty.conf" /home/nexo/.config/kitty/kitty.conf
+install -o nexo -g nexo -m 0644 "$OWNER_HOME/.config/themes/rexmortis/kitty.conf" /home/nexo/.config/kitty/theme.conf
+# Los avisos ya no heredan el tema personal del usuario anfitrión: tienen el
+# suyo, con la paleta de la sesión y colocados abajo a la derecha, encima de la
+# barra de tareas, como en Windows.
+install -o nexo -g nexo -m 0644 "$SOURCE_DIR/headless/swaync-config.json" /home/nexo/.config/swaync/config.json
+install -o nexo -g nexo -m 0644 "$SOURCE_DIR/headless/swaync-style.css" /home/nexo/.config/swaync/style.css
+install -o nexo -g nexo -m 0644 "$OWNER_HOME/.config/themes/rexmortis/waybar.css" /home/nexo/.config/waybar/style.css
+install -o nexo -g nexo -m 0644 "$OWNER_HOME/.config/themes/rexmortis/rofi.rasi" /home/nexo/.config/themes/rexmortis/rofi.rasi
+install -o nexo -g nexo -m 0644 "$SOURCE_DIR/headless/gtk-settings.ini" /home/nexo/.config/gtk-3.0/settings.ini
+install -o nexo -g nexo -m 0644 "$SOURCE_DIR/headless/gtk-settings.ini" /home/nexo/.config/gtk-4.0/settings.ini
+install -o nexo -g nexo -m 0644 "$SOURCE_DIR/headless/kdeglobals" /home/nexo/.config/kdeglobals
+install -o nexo -g nexo -m 0644 "$SOURCE_DIR/headless/dolphinrc" /home/nexo/.config/dolphinrc
+install -o nexo -g nexo -m 0644 "$SOURCE_DIR/headless/user-places.xbel" /home/nexo/.local/share/user-places.xbel
+# Brave y Chromium dentro de NEXO pedían el llavero del sistema, y el cuadro de
+# contraseña acababa dibujándose en la pantalla física a través del «prompter
+# del sistema» de gcr. Con almacén básico guardan sus secretos en su propio
+# perfil y no preguntan nada.
+install -o nexo -g nexo -m 0644 "$SOURCE_DIR/headless/brave-flags.conf" /home/nexo/.config/brave-flags.conf
+install -o nexo -g nexo -m 0644 "$SOURCE_DIR/headless/chromium-flags.conf" /home/nexo/.config/chromium-flags.conf
+install -o nexo -g nexo -m 0644 "$SOURCE_DIR/headless/chromium-flags.conf" /home/nexo/.config/chrome-flags.conf
+# Iconos del Escritorio. La configuración se instala siempre; el escritorio
+# sólo arranca si el equipo tiene pcmanfm-qt, así que la sesión funciona igual
+# sin él.
+install -d -o nexo -g nexo -m 0755 /home/nexo/.config/pcmanfm-qt /home/nexo/.config/pcmanfm-qt/nexo
+PCMANFM_SETTINGS=/home/nexo/.config/pcmanfm-qt/nexo/settings.conf
+if [ ! -f "$PCMANFM_SETTINGS" ]; then
+  install -o nexo -g nexo -m 0644 "$SOURCE_DIR/headless/pcmanfm-desktop.conf" "$PCMANFM_SETTINGS"
+else
+  # Ya existe: se respeta el fondo que haya elegido la persona, pero se corrige
+  # el modo, porque una instalación anterior escribió uno que pcmanfm-qt no
+  # entiende y dejaba el escritorio de un color liso.
+  sed -i 's|^WallpaperMode=.*|WallpaperMode=zoom|' "$PCMANFM_SETTINGS"
+  grep -q '^WallpaperMode=' "$PCMANFM_SETTINGS" || printf 'WallpaperMode=zoom\n' >>"$PCMANFM_SETTINGS"
+  grep -q '^Wallpaper=' "$PCMANFM_SETTINGS" ||
+    sed -i '/^\[Desktop\]/a Wallpaper=/opt/nexo/assets/viego-wallpaper.jpg' "$PCMANFM_SETTINGS"
+fi
+install -o nexo -g nexo -m 0644 "$SOURCE_DIR/headless/BIENVENIDO-NEXO.txt" "/home/nexo/Escritorio/BIENVENIDO A NEXO.txt"
+sed -i 's|/home/Letzus|/home/nexo|g' /home/nexo/.config/waybar/style.css
+printf '@define-color espada #c41e3a;\n@define-color espada2 #5cd8f0;\n@define-color red #e63950;\n' > /home/nexo/.cache/espada.css
+printf '* { espada: #c41e3a; espada2: #5cd8f0; }\n' > /home/nexo/.cache/espada.rasi
+chown nexo:nexo /home/nexo/.cache/espada.css
+chown nexo:nexo /home/nexo/.cache/espada.rasi
+chmod 0644 /home/nexo/.cache/espada.css /home/nexo/.cache/espada.rasi
+install -o root -g root -m 0755 "$SOURCE_DIR/headless/start-session" /usr/local/lib/nexo/start-session
+install -o root -g root -m 0755 "$SOURCE_DIR/headless/session-agent" /usr/local/lib/nexo/session-agent
+install -o root -g root -m 0755 "$SOURCE_DIR/headless/wait-ready" /usr/local/lib/nexo/wait-ready
+install -o root -g root -m 0755 "$SOURCE_DIR/headless/prepare-nested-parent" /usr/local/lib/nexo/prepare-nested-parent
+install -o root -g root -m 0755 "$SOURCE_DIR/headless/place-nested-window" /usr/local/lib/nexo/place-nested-window
+install -o root -g root -m 0755 "$SOURCE_DIR/headless/display-guard" /usr/local/lib/nexo/display-guard
+install -o root -g root -m 0755 "$SOURCE_DIR/headless/cleanup-nested-parent" /usr/local/lib/nexo/cleanup-nested-parent
+
+# Todos los scripts de la experiencia Windows, no una lista escrita a mano: es
+# el mismo error que dejó fuera un módulo de Node y rompió la sesión entera.
+# La biblioteca común se instala sin permiso de ejecución porque se carga con
+# `source`, nunca se lanza.
+for script in "$SOURCE_DIR"/headless/windows-*; do
+  case "$script" in
+    *.rasi|*.css|*.json|*.conf|*.jsonc) continue ;;
+    *windows-menu-lib) install -o root -g root -m 0644 "$script" "/usr/local/lib/nexo/$(basename "$script")" ;;
+    *) install -o root -g root -m 0755 "$script" "/usr/local/lib/nexo/$(basename "$script")" ;;
+  esac
+done
+# Una instalación anterior copió aquí una hoja de estilo por un patrón
+# demasiado ancho. No estorbaba, pero un archivo suelto y ejecutable en el
+# directorio de los ayudantes confunde a quien venga después.
+rm -f /usr/local/lib/nexo/windows-waybar.css
+
+# Cada ruta /usr/local/lib/nexo que citan los scripts, las barras y los atajos
+# tiene que existir. Un botón que llama a un archivo ausente no da ningún error
+# visible: simplemente no hace nada, y eso es muy difícil de diagnosticar desde
+# el celular.
+missing_helpers=''
+while read -r helper; do
+  [ -e "$helper" ] || missing_helpers="$missing_helpers $helper"
+done < <(grep -rhoE '/usr/local/lib/nexo/[A-Za-z0-9._-]+' \
+  "$SOURCE_DIR/headless/hyprland.conf" "$SOURCE_DIR/headless/waybar.jsonc" \
+  "$SOURCE_DIR/headless/window-titlebar.jsonc" "$SOURCE_DIR"/headless/windows-* | sort -u)
+[ -z "$missing_helpers" ] || {
+  printf 'Faltan ayudantes en /usr/local/lib/nexo:%s\n' "$missing_helpers" >&2
+  exit 1
+}
+install -o root -g root -m 0755 "$SOURCE_DIR/headless/nexo-session-control" /usr/local/bin/nexo-session-control
+install -o root -g root -m 0755 "$SOURCE_DIR/nexo-doctor" /opt/nexo/nexo-doctor
+install -o root -g root -m 0644 "$SOURCE_DIR/headless/nexo-headless.service" /etc/systemd/system/nexo-headless.service
+install -o root -g root -m 0644 "$SOURCE_DIR/headless/nexo-display-guard.service" /etc/systemd/system/nexo-display-guard.service
+install -o root -g root -m 0644 "$SOURCE_DIR/headless/pam-nexo-headless" /etc/pam.d/nexo-headless
+install -o root -g root -m 0644 "$SOURCE_DIR/headless/49-nexo-session-isolation.rules" \
+  /etc/polkit-1/rules.d/49-nexo-session-isolation.rules
+
+# Una regla de polkit que no compila se ignora sin avisar: el aislamiento
+# parece configurado y no lo está. Pasó de verdad —polkit 127 rechazó la
+# versión anterior por llevar acentos en los comentarios— y sólo se descubrió
+# leyendo el registro. Ahora se comprueba en el momento.
+polkit_since=$(date '+%Y-%m-%d %H:%M:%S')
+systemctl reload polkit 2>/dev/null || systemctl restart polkit 2>/dev/null || true
+sleep 1
+if journalctl -u polkit --since "$polkit_since" --no-pager 2>/dev/null |
+   grep -q '49-nexo-session-isolation.rules'; then
+  printf 'polkit rechazó la regla de aislamiento; la sesión nexo quedaría sin restricciones.\n' >&2
+  journalctl -u polkit --since "$polkit_since" --no-pager 2>/dev/null | tail -3 >&2
+  exit 1
+fi
+install -d -o root -g root -m 0755 "/etc/systemd/system/user-$NEXO_UID.slice.d"
+install -o root -g root -m 0644 "$SOURCE_DIR/headless/nexo-user-slice.conf" \
+  "/etc/systemd/system/user-$NEXO_UID.slice.d/50-nexo-limits.conf"
+
+for desktop in nexo-independent.desktop nexo-independent-copy.desktop nexo-independent-stop.desktop; do
+  install -o "$OWNER" -g "$OWNER_GROUP" -m 0644 \
+    "$SOURCE_DIR/headless/$desktop" "$OWNER_HOME/.local/share/applications/$desktop"
+done
+
+# VKMS se descarta: sobre NVIDIA el compositor recibe búferes «external-only»
+# que no puede copiar a esa tarjeta, falla al presentar y reintenta el modeset
+# cientos de veces por segundo, con la pantalla física corrupta y la carga por
+# las nubes. La salida invisible ahora la crea el propio Hyprland, que no pasa
+# por DRM. Se limpian los restos de la instalación anterior.
+rm -f /etc/modules-load.d/nexo-vkms.conf \
+      /etc/udev/rules.d/70-nexo-vkms-seat.rules \
+      /etc/udev/rules.d/72-seat-drm-platform-vkms.rules
+udevadm control --reload
+modprobe -r vkms 2>/dev/null || true
+systemctl daemon-reload
+# La sesion invitada NO se habilita: no debe arrancar con el equipo. Es una pila
+# completa y solo se levanta cuando alguien va a entrar. El `disable` limpia el
+# enlace de instalaciones anteriores, que si arrancaban solas.
+systemctl disable nexo-headless.service >/dev/null 2>&1 || true
+# La guía se vuelve a mostrar una vez tras actualizar, porque cada actualización
+# suele traer atajos nuevos que nadie descubriría solo.
+rm -f /home/nexo/.local/state/nexo-windows-welcome-v1 /home/nexo/.local/state/nexo-windows-welcome-v2
+
+printf '\nInstalación preparada. La sesión invitada NO arranca sola: se levanta cuando\n'
+printf 'alguien va a entrar, y mientras tanto no consume nada.\n'
+printf 'Levantar:         nexo-session-control start\n'
+printf 'Bajar:            nexo-session-control stop\n'
+printf 'Diagnóstico:      systemctl status nexo-headless.service --no-pager\n'
+printf 'Enlace:           nexo-session-control link\n'
+printf 'Apagar:           sudo systemctl stop nexo-headless.service\n'

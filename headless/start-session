@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BOOT_LOG=/var/lib/nexo-session/session-bootstrap.log
+touch "$BOOT_LOG"
+chmod 0640 "$BOOT_LOG"
+exec >>"$BOOT_LOG" 2>&1
+trap 'code=$?; printf "FALLO línea=%s código=%s comando=%s\n" "$LINENO" "$code" "$BASH_COMMAND"; exit "$code"' ERR
+
+printf '\n=== Inicio %s ===\n' "$(date --iso-8601=seconds)"
+
+export XDG_SESSION_TYPE=wayland
+export XDG_SESSION_DESKTOP=Hyprland
+export XDG_CURRENT_DESKTOP=Hyprland
+export HOME=${HOME:-/home/nexo}
+export XDG_RUNTIME_DIR=${NEXO_RUNTIME_DIR:-/run/nexo-session}
+printf 'usuario=%s uid=%s seat=%s runtime=%s home=%s\n' \
+  "$(id -un)" "$(id -u)" "${XDG_SEAT:-sin-seat}" "$XDG_RUNTIME_DIR" "$HOME"
+
+PARENT_ENV=${NEXO_PARENT_ENV:-/var/lib/nexo-session/parent-wayland.env}
+[ -r "$PARENT_ENV" ] || {
+  printf 'Nexo: falta el entorno del compositor anfitrión: %s\n' "$PARENT_ENV" >&2
+  exit 1
+}
+# El archivo sólo contiene valores descubiertos por prepare-nested-parent y no
+# acepta sintaxis de shell. WAYLAND_DISPLAY absoluto permite conservar un runtime
+# privado para el usuario remoto.
+PARENT_WAYLAND=$(sed -n 's/^WAYLAND_DISPLAY=//p' "$PARENT_ENV" | head -n 1)
+case "$PARENT_WAYLAND" in
+  /run/user/*/wayland-*) ;;
+  *) printf 'Nexo: WAYLAND_DISPLAY anfitrión inválido.\n' >&2; exit 1 ;;
+esac
+[ -S "$PARENT_WAYLAND" ] || {
+  printf 'Nexo: el socket Wayland anfitrión ya no existe: %s\n' "$PARENT_WAYLAND" >&2
+  exit 1
+}
+export WAYLAND_DISPLAY="$PARENT_WAYLAND"
+unset HYPRLAND_INSTANCE_SIGNATURE AQ_DRM_DEVICES
+export HYPRLAND_NO_SD_VARS=1
+printf 'wayland_padre=%s backend=anidado\n' "$WAYLAND_DISPLAY"
+
+mkdir -p "$HOME/.cache" "$HOME/.config" "$HOME/.local/state"
+printf 'iniciando Hyprland anidado\n'
+exec dbus-run-session -- Hyprland --config /etc/nexo/hyprland-headless.conf

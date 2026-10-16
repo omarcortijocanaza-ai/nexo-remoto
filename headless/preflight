@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -u
+
+failed=0
+check_command() {
+  if command -v "$1" >/dev/null 2>&1; then printf 'OK   %s\n' "$1"
+  else printf 'FALTA %s\n' "$1"; failed=1
+  fi
+}
+
+printf 'Nexo · comprobación previa de sesión independiente\n\n'
+for command in Hyprland hyprctl node cloudflared wf-recorder grim wtype \
+  pipewire pipewire-pulse wireplumber pactl loginctl modprobe systemctl dbus-run-session kitty \
+  jq flock setfacl runuser waybar swaync swaync-client rofi awww-daemon awww playerctl \
+  cliphist wl-copy wl-paste slurp swappy notify-send zenity xdg-user-dir dolphin firefox; do
+  if [ "$command" = cloudflared ]; then
+    [ -x "$(dirname -- "${BASH_SOURCE[0]}")/../bin/cloudflared" ] \
+      && printf 'OK   cloudflared incluido\n' \
+      || { printf 'FALTA cloudflared incluido\n'; failed=1; }
+  else
+    check_command "$command"
+  fi
+done
+
+if hyprctl --help 2>&1 | grep -q output || command -v hyprctl >/dev/null 2>&1; then
+  printf 'OK   hyprctl disponible para crear la salida invisible\n'
+else printf 'FALTA hyprctl\n'; failed=1
+fi
+
+if ss -ltn 2>/dev/null | grep -q ':8766 '; then
+  printf 'AVISO el puerto 8766 ya está ocupado\n'
+else
+  printf 'OK   puerto 8766 disponible\n'
+fi
+
+if Hyprland --verify-config --config "$(dirname -- "${BASH_SOURCE[0]}")/hyprland.conf" 2>&1 | grep -q 'config ok'; then
+  printf 'OK   configuración Hyprland válida\n'
+else
+  printf 'FALTA configuración Hyprland válida\n'; failed=1
+fi
+
+if [ "$failed" -eq 0 ]; then
+  printf '\nResultado: el equipo cumple los requisitos del prototipo.\n'
+else
+  printf '\nResultado: hay requisitos pendientes; no ejecutes el instalador todavía.\n'
+fi
+exit "$failed"

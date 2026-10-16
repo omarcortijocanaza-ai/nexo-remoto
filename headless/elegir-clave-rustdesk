@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ ${EUID} -eq 0 ]]; then
+  printf 'Ejecuta este asistente como Letzus, sin sudo. Él solicitará sudo cuando haga falta.\n' >&2
+  exit 1
+fi
+
+printf 'Cambiar contraseña permanente de RustDesk\n'
+printf 'La clave no se mostrará mientras escribes.\n\n'
+
+# Pedir la autorización antes de leer el secreto evita conservarlo mientras
+# el usuario atiende el diálogo o prompt de sudo.
+sudo -v
+
+while true; do
+  IFS= read -r -s -p 'Nueva contraseña (8-64 caracteres): ' rustdesk_password
+  printf '\n'
+  IFS= read -r -s -p 'Repítela: ' rustdesk_password_confirm
+  printf '\n'
+
+  if [[ ${#rustdesk_password} -lt 8 || ${#rustdesk_password} -gt 64 ]]; then
+    printf 'Debe tener entre 8 y 64 caracteres. Intenta nuevamente.\n\n' >&2
+  elif [[ ${rustdesk_password} != "${rustdesk_password_confirm}" ]]; then
+    printf 'Las contraseñas no coinciden. Intenta nuevamente.\n\n' >&2
+  else
+    break
+  fi
+
+  unset rustdesk_password rustdesk_password_confirm
+done
+
+sudo /usr/bin/rustdesk --password "${rustdesk_password}"
+unset rustdesk_password rustdesk_password_confirm
+
+printf '\nContraseña permanente actualizada.\n'
+printf 'No cierres esta conexión todavía: avisa a Codex para verificar el estado.\n'

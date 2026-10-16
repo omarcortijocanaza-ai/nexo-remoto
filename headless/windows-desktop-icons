@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -u
+
+# Iconos en el Escritorio, como en Windows.
+#
+# Hyprland no dibuja escritorio: sin esto, la carpeta Escritorio sólo se ve
+# desde el Explorador. `pcmanfm-qt --desktop` crea una capa con los archivos y
+# su propio menú de clic derecho.
+#
+# Es opcional a propósito: si el paquete no está instalado en el equipo, la
+# sesión arranca igual y el fondo lo sigue poniendo awww. Por eso no se llama
+# directamente desde la configuración de Hyprland.
+
+command -v pcmanfm-qt >/dev/null 2>&1 || exit 0
+pgrep -x pcmanfm-qt >/dev/null 2>&1 && exit 0
+
+# El escritorio se dibuja sobre el fondo de awww y lo tapa, así que usa la
+# misma imagen: se vea la capa de quien se vea, la pantalla es la misma.
+SETTINGS=${XDG_CONFIG_HOME:-$HOME/.config}/pcmanfm-qt/nexo/settings.conf
+STATE=${XDG_CONFIG_HOME:-$HOME/.config}/nexo-wallpaper
+if [ -s "$STATE" ] && [ -f "$SETTINGS" ]; then
+  image=$(head -1 "$STATE")
+  [ -f "$image" ] && sed -i "s|^Wallpaper=.*|Wallpaper=$image|" "$SETTINGS"
+fi
+
+exec pcmanfm-qt --desktop --profile=nexo

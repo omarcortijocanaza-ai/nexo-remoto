@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -u
+
+# «Acerca de esta sesión»: el equivalente a Configuración › Sistema › Acerca de.
+# Sólo datos de la propia sesión NEXO, nunca del equipo físico ni del usuario
+# principal.
+
+NX_LIB=$(dirname -- "${BASH_SOURCE[0]}")
+# shellcheck source=/dev/null
+. "$NX_LIB/windows-menu-lib"
+
+resolution=$(hyprctl -j monitors 2>/dev/null |
+  jq -r '.[0] | if .width then "\(.width)x\(.height) a \((.refreshRate // 0) | floor) Hz" else "desconocida" end' 2>/dev/null)
+windows=$(hyprctl -j clients 2>/dev/null | jq '[.[] | select(.mapped==true)] | length' 2>/dev/null)
+uptime=$(uptime -p 2>/dev/null | sed 's/^up /desde hace /')
+memory=$(free -h --si 2>/dev/null | awk '/^Mem/ {print $3 " usados de " $2}')
+disk=$(df -h --output=avail "$HOME" 2>/dev/null | tail -1 | tr -d ' ')
+compositor=$(hyprctl version 2>/dev/null | head -1 | sed 's/^Hyprland, built from.*/Hyprland/')
+
+zenity --info --title='Acerca de esta sesión' --width=470 --ok-label='Cerrar' \
+  --text="<big><b>Escritorio NEXO</b></big>
+
+Sesión independiente del usuario <b>nexo</b>, aislada de la cuenta principal.
+
+Pantalla: <b>${resolution:-desconocida}</b>
+Ventanas abiertas: <b>${windows:-0}</b>
+Encendida: <b>${uptime:-desconocido}</b>
+Memoria: <b>${memory:-desconocida}</b>
+Espacio libre en tu carpeta: <b>${disk:-desconocido}</b>
+Entorno: <b>${compositor:-Hyprland}</b> sobre Arch Linux
+
+Apagar o reiniciar el equipo se hace desde la sesión principal." \
+  >/dev/null 2>&1 &
+dialog_pid=$!
+nx_focus_dialog "$dialog_pid"
+wait "$dialog_pid" || true

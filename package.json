@@ -1,0 +1,15 @@
+{
+  "name": "nexo-remote-surface",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node launcher.js",
+    "local": "NEXO_MODE=local node launcher.js",
+    "remote": "NEXO_MODE=remote node launcher.js",
+    "both": "NEXO_MODE=both node launcher.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@roamhq/wrtc": "^0.10.0"
+  }
+}

@@ -1,0 +1,4 @@
+# VKMS vive bajo /devices/faux y path_id no genera ID_PATH para él. Se mantiene
+# en seat0 para que el Hyprland físico lo exponga como salida invisible; el
+# segundo Hyprland se ejecuta como cliente Wayland dentro de esa salida.
+SUBSYSTEM=="drm", KERNEL=="card[0-9]*", DEVPATH=="*/vkms/drm/card[0-9]*", ENV{ID_PATH}="platform-vkms", ENV{ID_PATH_TAG}="platform-vkms", ENV{ID_FOR_SEAT}="drm-platform-vkms", ENV{ID_SEAT}="seat0"

@@ -1,0 +1,40 @@
+/* NEXO · paleta común de la experiencia Windows.
+ *
+ * La importan windows-start.rasi y windows-dialog.rasi para que el menú Inicio,
+ * Ejecutar, Vista de tareas, el portapapeles y la configuración rápida compartan
+ * exactamente los mismos colores. Cambiar un valor aquí los cambia en todos.
+ *
+ * Los fondos llevan alfa a propósito: Hyprland difumina lo que queda detrás de
+ * una ventana translúcida, y ese acrílico es lo que hace que el panel se
+ * reconozca como un menú de Windows y no como un cuadro opaco pegado encima.
+ */
+
+* {
+    /* Superficies */
+    nx-panel:        #0f131ce8;
+    nx-panel-solid:  #0f131cff;
+    nx-layer:        #1b2231f0;
+    nx-layer-soft:   #ffffff10;
+    nx-layer-hover:  #ffffff1c;
+    nx-line:         #ffffff1f;
+
+    /* Acento NEXO */
+    nx-accent:       #5cd8f0;
+    nx-accent-fill:  #5cd8f026;
+    nx-accent-line:  #5cd8f05c;
+    nx-accent-deep:  #071116;
+
+    /* Texto */
+    nx-text:         #edf2f8;
+    nx-text-dim:     #a2adc0;
+    nx-text-faint:   #7c869a;
+
+    /* Estados */
+    nx-danger:       #ff5c72;
+    nx-danger-fill:  #ff5c7226;
+    nx-transparent:  #00000000;
+
+    /* Tipografía común */
+    nx-font:         "Noto Sans 12";
+    nx-font-small:   "Noto Sans 10";
+}

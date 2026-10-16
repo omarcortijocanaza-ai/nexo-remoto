@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=NEXO · Copiar enlace independiente
+Comment=Copia el enlace del escritorio remoto separado
+Exec=/usr/local/bin/nexo-session-control copy
+Icon=edit-copy
+Terminal=false
+Categories=Network;
+StartupNotify=false

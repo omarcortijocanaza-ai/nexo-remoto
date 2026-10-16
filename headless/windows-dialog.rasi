@@ -1,0 +1,140 @@
+/* NEXO · diálogos y menús de acción.
+ *
+ * Lo usan Ejecutar, Vista de tareas, el menú de la ventana, la configuración
+ * rápida, el historial del portapapeles, las capturas y la hoja de atajos.
+ * Lista vertical con icono a la izquierda, como los menús de Windows.
+ */
+
+@import "windows-colors.rasi"
+
+configuration {
+    show-icons: true;
+    icon-theme: "Papirus-Dark";
+    terminal: "kitty";
+    click-to-exit: true;
+    hover-select: true;
+    cycle: true;
+    matching: "fuzzy";
+    sorting-method: "fzf";
+    window-format: "{c}   {t}";
+}
+
+* {
+    font:             @nx-font;
+    background:       @nx-transparent;
+    background-color: @nx-transparent;
+    foreground:       @nx-text;
+    text-color:       @nx-text;
+}
+
+window {
+    width:            600px;
+    location:         center;
+    anchor:           center;
+    background-color: @nx-panel;
+    border:           1px;
+    border-color:     @nx-line;
+    border-radius:    12px;
+    padding:          16px;
+    children:         [ mainbox ];
+}
+
+mainbox {
+    children: [ inputbar, message, listview ];
+    spacing:  12px;
+}
+
+inputbar {
+    background-color: @nx-layer;
+    border:           1px;
+    border-color:     @nx-line;
+    border-radius:    9px;
+    padding:          11px 13px;
+    spacing:          10px;
+    children:         [ prompt, entry ];
+}
+
+prompt {
+    text-color:     @nx-accent;
+    vertical-align: 0.5;
+}
+
+entry {
+    placeholder:       "Escribe para filtrar";
+    placeholder-color: @nx-text-faint;
+    cursor:            text;
+    vertical-align:    0.5;
+}
+
+/* Línea de estado bajo el buscador: volumen actual, red, avisos. */
+message {
+    background-color: @nx-layer-soft;
+    border:           1px;
+    border-color:     @nx-line;
+    border-radius:    9px;
+    padding:          10px 13px;
+}
+
+textbox {
+    text-color:     @nx-text-dim;
+    vertical-align: 0.5;
+}
+
+listview {
+    lines:        9;
+    columns:      1;
+    fixed-height: false;
+    cycle:        true;
+    scrollbar:    true;
+    spacing:      4px;
+}
+
+scrollbar {
+    handle-width:     5px;
+    handle-color:     @nx-accent-line;
+    background-color: @nx-layer-soft;
+    border-radius:    4px;
+    margin:           0 0 0 8px;
+}
+
+element {
+    orientation:   horizontal;
+    padding:       11px 12px;
+    spacing:       12px;
+    border:        1px;
+    border-color:  @nx-transparent;
+    border-radius: 8px;
+    cursor:        pointer;
+}
+
+element selected,
+element selected.normal {
+    background-color: @nx-accent-fill;
+    border-color:     @nx-accent-line;
+    text-color:       @nx-text;
+}
+
+element urgent {
+    background-color: @nx-danger-fill;
+}
+
+element-icon {
+    size:             26px;
+    vertical-align:   0.5;
+    background-color: @nx-transparent;
+    cursor:           inherit;
+}
+
+element-text {
+    vertical-align:   0.5;
+    ellipsize:        "end";
+    text-color:       inherit;
+    background-color: @nx-transparent;
+    cursor:           inherit;
+}
+
+error-message {
+    background-color: @nx-panel-solid;
+    border-radius:    10px;
+    padding:          14px;
+}

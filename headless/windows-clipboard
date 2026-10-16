@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -u
+
+# Historial del portapapeles (Windows+V), sobre cliphist.
+#
+# Copiar dentro del escritorio remoto y volver a pegarlo minutos después es una
+# de las cosas que más se echan de menos aquí, porque el portapapeles del
+# celular y el del escritorio no son el mismo. El demonio `wl-paste --watch`
+# guarda cada copia y este menú las devuelve.
+
+NX_LIB=$(dirname -- "${BASH_SOURCE[0]}")
+# shellcheck source=/dev/null
+. "$NX_LIB/windows-menu-lib"
+
+CLEAR_LABEL='Vaciar el historial'
+
+mapfile -t entries < <(cliphist list 2>/dev/null)
+
+if [ "${#entries[@]}" -eq 0 ]; then
+  nx_row 'El historial está vacío' dialog-information |
+    nx_menu 'Portapapeles' \
+      'Copia algo con Ctrl+C dentro de NEXO y vuelve a abrir Windows+V.' \
+      'NEXO Portapapeles' >/dev/null
+  exit 0
+fi
+
+# cliphist entrega «identificador<TAB>vista previa». Se muestra sólo la vista
+# previa —el identificador no le dice nada a nadie— y luego se busca la línea
+# completa, que es lo que `cliphist decode` necesita para recuperar el
+# contenido original, incluidas las imágenes.
+choice=$(
+  {
+    for entry in "${entries[@]}"; do
+      preview=${entry#*$'\t'}
+      case "$preview" in
+        '[[ binary data'*) nx_row "$preview" image-x-generic ;;
+        *) nx_row "$preview" edit-paste ;;
+      esac
+    done
+    nx_row "$CLEAR_LABEL" edit-clear-history
+  } | nx_menu 'Portapapeles' \
+      "${#entries[@]} elementos · Enter copia · después pega con Ctrl+V" \
+      'NEXO Portapapeles'
+) || exit 0
+
+[ -n "$choice" ] || exit 0
+
+if [ "$choice" = "$CLEAR_LABEL" ]; then
+  cliphist wipe
+  nx_notify 'Portapapeles' 'Historial vaciado.' edit-clear-history
+  exit 0
+fi
+
+selected=''
+for entry in "${entries[@]}"; do
+  if [ "${entry#*$'\t'}" = "$choice" ]; then
+    selected=$entry
+    break
+  fi
+done
+
+if [ -z "$selected" ]; then
+  nx_notify 'Portapapeles' 'Ese elemento ya no está en el historial.' dialog-warning
+  exit 0
+fi
+
+if printf '%s' "$selected" | cliphist decode | wl-copy; then
+  nx_notify 'Portapapeles' 'Copiado. Pega con Ctrl+V.' edit-paste
+else
+  nx_notify 'Portapapeles' 'No se pudo recuperar ese elemento.' dialog-warning
+fi

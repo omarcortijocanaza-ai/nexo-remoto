@@ -1,0 +1,19 @@
+[Unit]
+Description=Nexo · vigilancia de resolución y pantalla completa
+After=nexo-headless.service
+PartOf=nexo-headless.service
+
+[Service]
+Type=simple
+Environment=NEXO_PARENT_ENV=/var/lib/nexo-session/parent-wayland.env
+Environment=NEXO_HOST_USER=Letzus
+Environment=NEXO_HOST_UID=1000
+Environment=NEXO_HOST_OUTPUT=Virtual-1
+Environment=NEXO_HOST_WORKSPACE=11
+ExecStart=/usr/local/lib/nexo/display-guard
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+

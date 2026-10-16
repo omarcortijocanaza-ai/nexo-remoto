@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07110f">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>NEXO — Micrófono</title>
+  <style>
+    :root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif;--ink:#06100e;--panel:#0b1816ed;--mint:#62f6c8;--coral:#ff796d;--cream:#f3f0df;--line:#a6ffe52b}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}[hidden]{display:none!important}
+    html,body{margin:0;min-height:100%;background:radial-gradient(circle at 15% 10%,#12332b 0,transparent 30%),radial-gradient(circle at 90% 88%,#311918 0,transparent 28%),var(--ink);color:var(--cream)}
+    body{display:flex;flex-direction:column;align-items:center;gap:22px;padding:28px 20px calc(28px + env(safe-area-inset-bottom));min-height:100dvh;justify-content:center}
+    h1{margin:0;font-size:15px;letter-spacing:.28em;text-transform:uppercase;color:var(--mint);font-weight:600}
+    .marca{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
+    .marca p{margin:0;font-size:13px;line-height:1.5;color:#f3f0dfa8;max-width:34ch}
+    #boton{position:relative;width:min(62vw,230px);aspect-ratio:1;border-radius:50%;border:2px solid var(--line);background:#0b18168f;color:var(--cream);display:grid;place-items:center;gap:10px;cursor:pointer;transition:border-color .2s,box-shadow .2s,background .2s;padding:0}
+    #boton svg{width:62px;height:62px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;transition:stroke .2s}
+    #boton .rotulo{font-size:13px;letter-spacing:.22em;text-transform:uppercase;color:#f3f0dfa0}
+    #boton .contenido{display:grid;place-items:center;gap:12px;z-index:1}
+    body.activo #boton{border-color:var(--mint);background:#62f6c814;box-shadow:0 0 0 1px #62f6c840,0 0 44px #62f6c826}
+    body.activo #boton svg{stroke:var(--mint)}
+    body.activo #boton .rotulo{color:var(--mint)}
+    body.silenciado #boton{border-color:var(--coral);background:#ff796d14;box-shadow:0 0 0 1px #ff796d40,0 0 40px #ff796d1f}
+    body.silenciado #boton svg{stroke:var(--coral)}
+    body.silenciado #boton .rotulo{color:var(--coral)}
+    body.conectando #boton{border-color:#f3f0df4d;animation:latido 1.4s ease-in-out infinite}
+    @keyframes latido{50%{opacity:.55}}
+    /* El aro crece con la voz: es la única prueba, sin mirar la PC, de que el
+       audio sale de verdad y no sólo de que el botón se puso verde. */
+    #aro{position:absolute;inset:-6px;border-radius:50%;border:2px solid var(--mint);opacity:0;transform:scale(1);pointer-events:none;transition:transform .12s ease-out,opacity .18s}
+    #medidor{width:min(100%,320px);height:6px;border-radius:99px;background:#a6ffe51f;overflow:hidden}
+    #medidor span{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,var(--mint),#a6ffe5);transition:width .1s linear}
+    body.silenciado #medidor span{background:var(--coral)}
+    #estado{margin:0;font-size:14px;text-align:center;min-height:2.6em;line-height:1.45;max-width:36ch;color:#f3f0dfcc}
+    #dispositivo{margin:0;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#f3f0df66;text-align:center}
+    #aviso{margin:0;font-size:12.5px;line-height:1.45;text-align:center;max-width:36ch;color:var(--coral)}
+    .acciones{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+    button.plana{border-radius:12px;border:1px solid var(--line);background:#0b18168f;color:var(--cream);padding:12px 20px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+    button.plana:disabled{opacity:.35;cursor:default}
+    #mudo.encendido{border-color:var(--coral);color:var(--coral);background:#ff796d14}
+    .ficha{width:min(100%,360px);border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:14px 16px;font-size:12.5px;line-height:1.6;color:#f3f0dfab}
+    .ficha b{color:var(--mint);font-weight:600}
+    .ficha code{background:#a6ffe51a;border-radius:5px;padding:1px 6px;font-size:12px;color:var(--cream)}
+    a{color:var(--mint)}
+  </style>
+</head>
+<body>
+  <div class="marca">
+    <h1>NEXO · Micrófono</h1>
+    <p>Tu celular como micrófono de la PC. La pantalla remota no se usa aquí.</p>
+  </div>
+
+  <button id="boton" type="button" aria-pressed="false" aria-label="Activar micrófono">
+    <div id="aro"></div>
+    <div class="contenido">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="9" y="2.5" width="6" height="11" rx="3"/>
+        <path d="M5.5 11a6.5 6.5 0 0 0 13 0"/>
+        <path d="M12 17.5V21"/><path d="M8.5 21h7"/>
+        <path id="tachado" d="M4 3.5 20 20.5" stroke="var(--coral)" opacity="0"/>
+      </svg>
+      <span class="rotulo" id="rotulo">Activar</span>
+    </div>
+  </button>
+
+  <div id="medidor"><span id="barra"></span></div>
+  <p id="estado">Toca el círculo para empezar.</p>
+  <p id="aviso" hidden></p>
+  <p id="dispositivo"></p>
+
+  <div class="acciones">
+    <button class="plana" id="mudo" type="button" disabled>Silenciar</button>
+    <button class="plana" id="apagar" type="button" disabled>Apagar</button>
+  </div>
+
+  <div class="ficha">
+    En la PC elige la entrada <b>Micrófono del celular (NEXO)</b> —<code>nexo_micro</code>— en Discord, OBS, Meet o donde vayas a hablar.
+    Puedes bloquear el teléfono: el micrófono sigue enviando mientras esta pestaña esté abierta y la notificación de NEXO siga en la barra.
+    <br><a href="/">Ir al escritorio remoto</a> · emparejamiento y sesión se hacen ahí.
+  </div>
+
+  <script src="/microfono-cliente.js"></script>
+  <script>
+    (function () {
+      const mic = window.NexoMicrofono;
+      const boton = document.getElementById('boton');
+      const rotulo = document.getElementById('rotulo');
+      const estadoTexto = document.getElementById('estado');
+      const dispositivo = document.getElementById('dispositivo');
+      const barra = document.getElementById('barra');
+      const aro = document.getElementById('aro');
+      const tachado = document.getElementById('tachado');
+      const aviso = document.getElementById('aviso');
+      const mudo = document.getElementById('mudo');
+      const apagar = document.getElementById('apagar');
+
+      mic.alCambiar(estado => {
+        const encendido = estado.activo || estado.conectando;
+        document.body.classList.toggle('activo', estado.activo && !estado.silenciado);
+        document.body.classList.toggle('silenciado', estado.activo && estado.silenciado);
+        document.body.classList.toggle('conectando', estado.conectando);
+        boton.setAttribute('aria-pressed', String(estado.activo));
+        boton.setAttribute('aria-label', encendido ? 'Apagar micrófono' : 'Activar micrófono');
+        rotulo.textContent = estado.conectando ? 'Conectando' : estado.activo ? (estado.silenciado ? 'Silenciado' : 'En vivo') : 'Activar';
+        tachado.setAttribute('opacity', estado.silenciado ? '1' : '0');
+        if (estado.mensaje) estadoTexto.textContent = estado.mensaje;
+        aviso.textContent = estado.aviso || '';
+        aviso.hidden = !estado.aviso;
+        dispositivo.textContent = estado.activo && estado.dispositivo ? estado.dispositivo : '';
+        barra.style.width = Math.round(estado.nivel * 100) + '%';
+        aro.style.opacity = estado.activo && !estado.silenciado ? String(0.15 + estado.nivel * 0.65) : '0';
+        aro.style.transform = `scale(${1 + estado.nivel * 0.09})`;
+        mudo.disabled = !estado.activo;
+        mudo.classList.toggle('encendido', estado.silenciado);
+        mudo.textContent = estado.silenciado ? 'Reactivar' : 'Silenciar';
+        apagar.disabled = !encendido;
+      });
+
+      boton.addEventListener('click', () => mic.alternar());
+      mudo.addEventListener('click', () => mic.silenciar());
+      apagar.addEventListener('click', () => mic.desactivar());
+
+      // Cerrar la pestaña sin avisar deja el proceso de audio de la PC
+      // escribiendo silencio hasta que caduque. Un aviso corto lo libera ya.
+      addEventListener('pagehide', () => {
+        if (!mic.estado.activo && !mic.estado.conectando) return;
+        navigator.sendBeacon?.('/microfono/apagar', new Blob(['{}'], { type: 'application/json' }));
+      });
+    })();
+  </script>
+</body>
+</html>

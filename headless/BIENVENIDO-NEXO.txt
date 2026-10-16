@@ -1,0 +1,61 @@
+BIENVENIDO A NEXO
+=================
+
+Este escritorio está organizado para resultar familiar si vienes de Windows.
+
+Lo básico
+---------
+
+- Inicio: esquina inferior izquierda, o la tecla Windows. Tiene cuatro pestañas:
+  Aplicaciones, Ejecutar, Ventanas y Archivos.
+- Explorador: botón de carpeta, Windows+E o Windows+1.
+- Firefox: botón naranja de la barra, o Windows+2.
+- Terminal: Ctrl+Alt+T o Windows+3.
+- Aplicaciones abiertas: aparecen en la barra inferior.
+- Escritorios virtuales: los cuatro números junto a Vista de tareas.
+
+Ventanas
+--------
+
+- Arriba siempre aparecen el nombre de la aplicación, los acomodos ◧ ◨ y los
+  botones minimizar, maximizar/restaurar y la × roja para cerrar.
+- Alt+Tab: cambiar de ventana. Alt+Shift+Tab: al revés.
+- Alt+F4: cerrar la ventana actual.
+- Alt+Espacio: menú de acciones de la ventana, con acomodos y «siempre encima».
+- Windows+Arriba: maximizar. Windows+Abajo: restaurar.
+- Windows+Izquierda/Derecha: media pantalla.
+- Windows+Shift+Flechas: un cuarto de pantalla.
+- Windows+Inicio: centrar la ventana.
+
+Del día a día
+-------------
+
+- Windows+V: historial del portapapeles.
+- Windows+Shift+S: recortar una parte de la pantalla.
+- Impr Pant: capturar la pantalla completa. Alt+Impr Pant: sólo la ventana.
+  Las capturas quedan en Imágenes/Capturas y en el portapapeles.
+- Windows+I: sonido, red, notificaciones, capturas y ayuda.
+- Windows+N: centro de notificaciones.
+- Windows+D: mostrar o restaurar el escritorio.
+- Windows+Tab: vista de tareas.
+- Windows+Ctrl+Izquierda/Derecha: cambiar de escritorio virtual.
+- Windows+/: lista buscable de todos los atajos.
+- Clic derecho sobre el fondo: menú del escritorio, con «Nueva carpeta», fondo de
+  pantalla, terminal y configuración.
+- En la Terminal, Ctrl+C copia si hay algo seleccionado y Ctrl+V pega, como en la
+  Terminal de Windows.
+- El fondo de pantalla se cambia desde Windows+I › Fondo de pantalla.
+
+Carpetas personales
+-------------------
+
+- Escritorio
+- Documentos
+- Descargas
+- Imágenes (las capturas van en Imágenes/Capturas)
+- Música
+- Vídeos
+
+Esta sesión NEXO está aislada de la cuenta principal. Tus archivos y aplicaciones se
+mantienen dentro del usuario nexo. Apagar o reiniciar el equipo se hace desde la
+sesión principal.

@@ -1,0 +1,125 @@
+{
+    "layer": "top",
+    "position": "bottom",
+    "height": 48,
+    "spacing": 2,
+    "margin-left": 0,
+    "margin-right": 0,
+    "margin-bottom": 0,
+    "modules-left": ["custom/start", "custom/search", "custom/task-view", "hyprland/workspaces", "custom/files", "custom/browser", "custom/terminal", "wlr/taskbar"],
+    "modules-center": [],
+    "modules-right": ["mpris", "custom/screenshot", "custom/clipboard", "custom/settings", "tray", "network", "pulseaudio", "custom/notification", "clock", "custom/show-desktop"],
+    "custom/start": {
+        "format": "󰖳",
+        "tooltip-format": "Inicio · aplicaciones, archivos y ventanas\nClic derecho: configuración rápida",
+        "on-click": "/usr/local/lib/nexo/windows-start-menu",
+        "on-click-right": "/usr/local/lib/nexo/windows-quick-settings"
+    },
+    "custom/search": {
+        "format": "󰍉  Buscar",
+        "tooltip-format": "Buscar aplicaciones, archivos y comandos (Windows+S)",
+        "on-click": "/usr/local/lib/nexo/windows-start-menu"
+    },
+    "custom/task-view": {
+        "format": "󰅰",
+        "tooltip-format": "Vista de tareas (Windows+Tab)\nClic derecho: escritorios virtuales",
+        "on-click": "/usr/local/lib/nexo/windows-task-view",
+        "on-click-right": "/usr/local/lib/nexo/windows-desktops"
+    },
+    "hyprland/workspaces": {
+        "format": "{id}",
+        "all-outputs": true,
+        "persistent-workspaces": {"1": [], "2": [], "3": [], "4": []},
+        "tooltip": false,
+        "on-scroll-up": "hyprctl dispatch workspace r+1",
+        "on-scroll-down": "hyprctl dispatch workspace r-1"
+    },
+    "custom/files": {
+        "format": "󰉋",
+        "tooltip-format": "Explorador de archivos (Windows+E · Windows+1)",
+        "on-click": "dolphin"
+    },
+    "custom/browser": {
+        "format": "󰈹",
+        "tooltip-format": "Firefox (Windows+2)",
+        "on-click": "firefox"
+    },
+    "custom/terminal": {
+        "format": "󰆍",
+        "tooltip-format": "Terminal (Ctrl+Alt+T · Windows+3)",
+        "on-click": "kitty"
+    },
+    "wlr/taskbar": {
+        "format": "{icon}",
+        "icon-size": 25,
+        "tooltip-format": "{title}\nClic: abrir o restaurar · clic derecho/central: cerrar",
+        "on-click": "activate",
+        "on-click-middle": "close",
+        "on-click-right": "close",
+        "ignore-list": ["waybar"]
+    },
+    "mpris": {
+        "format": "{player_icon}",
+        "format-paused": "󰏤",
+        "player-icons": {"default": "󰝚", "firefox": "󰈹"},
+        "tooltip-format": "{artist} — {title}",
+        "on-click": "playerctl play-pause"
+    },
+    "custom/screenshot": {
+        "format": "󰄄",
+        "tooltip-format": "Captura de pantalla (Windows+Shift+S)",
+        "on-click": "/usr/local/lib/nexo/windows-screenshot",
+        "on-click-right": "/usr/local/lib/nexo/windows-screenshot full"
+    },
+    "custom/clipboard": {
+        "format": "󰅌",
+        "tooltip-format": "Historial del portapapeles (Windows+V)",
+        "on-click": "/usr/local/lib/nexo/windows-clipboard"
+    },
+    "custom/settings": {
+        "format": "󰒓",
+        "tooltip-format": "Configuración rápida (Windows+I)\nClic derecho: atajos de teclado",
+        "on-click": "/usr/local/lib/nexo/windows-quick-settings",
+        "on-click-right": "/usr/local/lib/nexo/windows-shortcuts"
+    },
+    "tray": {"icon-size": 18, "spacing": 8},
+    "network": {
+        "format-wifi": "󰖩",
+        "format-ethernet": "󰈀",
+        "format-disconnected": "󰖪",
+        "tooltip-format-wifi": "{essid}\nSeñal: {signalStrength}%",
+        "tooltip-format-ethernet": "Red cableada",
+        "tooltip-format-disconnected": "Sin conexión",
+        "on-click": "/usr/local/lib/nexo/windows-network-info"
+    },
+    "pulseaudio": {
+        "format": "{icon}",
+        "format-muted": "󰝟",
+        "format-icons": {"default": ["󰕿", "󰖀", "󰕾"]},
+        "tooltip-format": "Volumen: {volume}%\nRueda: subir o bajar · clic derecho: silenciar",
+        "scroll-step": 5,
+        "on-click": "pavucontrol",
+        "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+    },
+    "custom/notification": {
+        "format": "{icon}",
+        "format-icons": {"notification": "󰂚", "none": "󰂚", "dnd-notification": "󰂛", "dnd-none": "󰂛"},
+        "return-type": "json",
+        "exec": "swaync-client -swb",
+        "tooltip-format": "Notificaciones (Windows+N)\nClic derecho: no molestar",
+        "on-click": "swaync-client -t -sw",
+        "on-click-right": "swaync-client -d -sw"
+    },
+    "clock": {
+        "interval": 1,
+        "format": "{:%H:%M\n%d/%m/%Y}",
+        "tooltip-format": "<big>{:%A, %d de %B de %Y}</big>\n<tt><small>{calendar}</small></tt>",
+        "calendar": {"mode": "month", "weeks-pos": "right"},
+        "on-click": "swaync-client -t -sw"
+    },
+    "custom/show-desktop": {
+        "format": " ",
+        "tooltip-format": "Mostrar el escritorio (Windows+D)",
+        "on-click": "/usr/local/lib/nexo/windows-show-desktop"
+    }
+}

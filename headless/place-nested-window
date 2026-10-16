@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+HOST_USER=${NEXO_HOST_USER:-Letzus}
+HOST_UID=${NEXO_HOST_UID:-1000}
+REMOTE_USER=${NEXO_REMOTE_USER:-nexo}
+PARENT_ENV=${NEXO_PARENT_ENV:-/var/lib/nexo-session/parent-wayland.env}
+HOST_RUNTIME=/run/user/$HOST_UID
+
+value() { sed -n "s/^$1=//p" "$PARENT_ENV" | head -n 1; }
+PARENT_SOCKET=$(value WAYLAND_DISPLAY)
+HYPR_SIGNATURE=$(value HYPRLAND_INSTANCE_SIGNATURE)
+HOST_WORKSPACE=$(value HOST_WORKSPACE)
+HOST_FOCUS=$(value HOST_FOCUS)
+WAYLAND_NAME=${PARENT_SOCKET##*/}
+
+run_host() {
+  /usr/bin/runuser -u "$HOST_USER" -- env XDG_RUNTIME_DIR="$HOST_RUNTIME" \
+    WAYLAND_DISPLAY="$WAYLAND_NAME" HYPRLAND_INSTANCE_SIGNATURE="$HYPR_SIGNATURE" "$@"
+}
+
+NESTED_PID=''
+FOUND=0
+# 20 s no alcanzaban en un arranque en frío: la ventana anidada aparecía justo
+# al expirar la espera, el arranque se daba por fallido y el reintento de
+# systemd dejaba dos sesiones NEXO vivas. 60 s cubren el arranque completo.
+for _ in $(seq 1 240); do
+  NESTED_PID=$(pgrep -u "$REMOTE_USER" -n -x Hyprland 2>/dev/null || true)
+  if [ -n "$NESTED_PID" ] && run_host hyprctl -j clients | \
+      jq -e --argjson pid "$NESTED_PID" '.[] | select(.pid == $pid and .class == "aquamarine")' >/dev/null; then
+    FOUND=1
+    break
+  fi
+  sleep 0.25
+done
+[ "$FOUND" -eq 1 ] || { printf 'Nexo: no apareció la ventana del Hyprland anidado.\n' >&2; exit 1; }
+
+# Primero se mueve a la salida virtual. Después se aplica fullscreen ya con el
+# tamaño final del monitor; algunos clientes Wayland descartan el fullscreen si
+# reciben otra configuración de tamaño durante su primer mapeo.
+run_host hyprctl eval "hl.dispatch(hl.dsp.window.move({ workspace = \"$HOST_WORKSPACE\", follow = false, window = \"pid:$NESTED_PID\" }))" >/dev/null
+PLACED=0
+STABLE=0
+for _ in $(seq 1 20); do
+  CLIENT=$(run_host hyprctl -j clients | jq --argjson pid "$NESTED_PID" \
+    '.[] | select(.pid == $pid)')
+  if jq -e '.fullscreen == 2 and .size[0] == 1920 and .size[1] == 1080' <<<"$CLIENT" >/dev/null; then
+    STABLE=$((STABLE + 1))
+    if [ "$STABLE" -ge 3 ]; then PLACED=1; break; fi
+    sleep 0.5
+    continue
+  fi
+  STABLE=0
+  run_host hyprctl eval "hl.dispatch(hl.dsp.focus({ window = \"pid:$NESTED_PID\" }))" >/dev/null
+  if ! jq -e '.fullscreen == 2' <<<"$CLIENT" >/dev/null; then
+    run_host hyprctl eval 'hl.dispatch(hl.dsp.window.fullscreen({ mode = "fullscreen", action = "set", window = "activewindow" }))' >/dev/null
+  fi
+  sleep 0.5
+done
+[ "$PLACED" -eq 1 ] || { printf 'Nexo: la ventana anidada no alcanzó 1920x1080 fullscreen.\n' >&2; exit 1; }
+if [ -n "$HOST_FOCUS" ] && [ "$HOST_FOCUS" != 0x0 ]; then
+  run_host hyprctl eval "hl.dispatch(hl.dsp.focus({ window = \"address:$HOST_FOCUS\" }))" >/dev/null || true
+fi

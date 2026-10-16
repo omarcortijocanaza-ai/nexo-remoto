@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -u
+
+# Estado de la red, sólo de lectura: cambiarla se reserva a la sesión principal.
+
+NX_LIB=$(dirname -- "${BASH_SOURCE[0]}")
+# shellcheck source=/dev/null
+. "$NX_LIB/windows-menu-lib"
+
+connection=$(nx_network_text)
+device=$(nmcli -t -f GENERAL.DEVICE device show 2>/dev/null |
+  sed -n 's/^GENERAL\.DEVICE://p' | head -1)
+[ -n "$device" ] || device='No disponible'
+
+zenity --info --title='Estado de la red' --width=430 --ok-label='Cerrar' \
+  --text="<big><b>Red del equipo</b></big>
+
+Conexión: <b>$connection</b>
+Dispositivo: $device
+
+Por seguridad, la red se administra desde la sesión principal." \
+  >/dev/null 2>&1 &
+dialog_pid=$!
+nx_focus_dialog "$dialog_pid"
+wait "$dialog_pid" || true

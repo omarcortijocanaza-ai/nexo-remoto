@@ -1,0 +1,243 @@
+/* NEXO · barra de tareas y barra de título.
+ *
+ * Los colores son los mismos de windows-colors.rasi, escritos aquí en el
+ * formato que entiende GTK: el menú Inicio, los diálogos y las dos barras
+ * tienen que parecer piezas del mismo escritorio y no tres temas distintos.
+ */
+
+@define-color panel      rgba(15, 19, 28, 0.94);
+@define-color panel-top  rgba(19, 24, 35, 0.97);
+@define-color surface    rgba(255, 255, 255, 0.07);
+@define-color hover      rgba(255, 255, 255, 0.12);
+@define-color accent     #5cd8f0;
+@define-color accent-dim rgba(92, 216, 240, 0.16);
+@define-color line       rgba(255, 255, 255, 0.10);
+@define-color text       #edf2f8;
+@define-color muted      #a2adc0;
+@define-color faint      #7c869a;
+@define-color danger     #ff5c72;
+
+* {
+    font-family: "Segoe UI", "Noto Sans", "JetBrainsMono Nerd Font", sans-serif;
+    font-size: 13px;
+    min-height: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+/* ---------------------------------------------------------------- barras */
+
+window#waybar {
+    background: @panel;
+    color: @text;
+    border-top: 1px solid @line;
+}
+
+window#waybar.top {
+    background: @panel-top;
+    border-top: none;
+    border-bottom: 1px solid @line;
+}
+
+/* ------------------------------------------- barra superior de la ventana */
+
+window#waybar.top #custom-window-app {
+    min-width: 132px;
+    padding: 0 14px;
+    color: @accent;
+    font-size: 13px;
+    font-weight: 600;
+    border-right: 1px solid @line;
+}
+
+window#waybar.top #custom-window-app:hover { background: @hover; }
+window#waybar.top #custom-window-app.desktop { color: @faint; font-weight: 500; }
+
+window#waybar.top #window {
+    min-width: 280px;
+    margin: 0;
+    padding: 0 12px;
+    color: @text;
+    font-weight: 500;
+}
+
+window#waybar.top #custom-window-snap-left,
+window#waybar.top #custom-window-snap-right {
+    min-width: 34px;
+    padding: 0 6px;
+    color: @faint;
+    font-size: 15px;
+    transition: background 120ms ease, color 120ms ease;
+}
+
+window#waybar.top #custom-window-snap-left:hover,
+window#waybar.top #custom-window-snap-right:hover { background: @hover; color: @accent; }
+
+window#waybar.top #custom-window-minimize,
+window#waybar.top #custom-window-maximize,
+window#waybar.top #custom-window-close {
+    min-width: 46px;
+    margin: 0;
+    padding: 0 10px;
+    border-radius: 0;
+    color: @text;
+    font-size: 19px;
+    transition: background 120ms ease, color 120ms ease;
+}
+
+window#waybar.top #custom-window-minimize:hover,
+window#waybar.top #custom-window-maximize:hover { background: @hover; }
+window#waybar.top #custom-window-close { background: rgba(255, 92, 114, 0.10); }
+window#waybar.top #custom-window-close:hover { background: @danger; color: #12161f; }
+window#waybar.top #custom-window-maximize.inactive { color: @faint; }
+window#waybar.top #custom-window-maximize.maximized { color: @accent; }
+
+/* ------------------------------------------------- botones de la inferior */
+
+#custom-start,
+#custom-search,
+#custom-task-view,
+#custom-files,
+#custom-browser,
+#custom-terminal,
+#custom-screenshot,
+#custom-clipboard,
+#custom-settings,
+#taskbar button,
+#workspaces button,
+#mpris,
+#tray,
+#network,
+#pulseaudio,
+#custom-notification,
+#clock,
+#custom-show-desktop {
+    min-width: 38px;
+    margin: 4px 1px;
+    padding: 0 9px;
+    border-radius: 6px;
+    color: @text;
+    background: transparent;
+    transition: background 120ms ease, color 120ms ease;
+}
+
+#custom-start {
+    min-width: 44px;
+    margin-left: 5px;
+    color: @accent;
+    font-size: 22px;
+}
+
+#custom-start:hover { background: @accent-dim; }
+
+#custom-search {
+    min-width: 112px;
+    padding: 0 14px;
+    color: @muted;
+    background: @surface;
+    border: 1px solid @line;
+    font-size: 12px;
+}
+
+#custom-search:hover { color: @text; background: @hover; }
+
+#custom-task-view { color: @muted; font-size: 18px; }
+
+/* Escritorios virtuales: pastillas numeradas, como los de la Vista de tareas. */
+#workspaces { padding: 0 4px; }
+
+#workspaces button {
+    min-width: 26px;
+    padding: 0 6px;
+    color: @faint;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+#workspaces button:hover { background: @hover; color: @text; }
+#workspaces button.active { background: @accent-dim; color: @accent; }
+#workspaces button.urgent { background: rgba(255, 92, 114, 0.30); color: @text; }
+#workspaces button.empty { color: rgba(124, 134, 154, 0.55); }
+
+/* Aplicaciones ancladas: conservan su color de marca, como en Windows. */
+#custom-files { color: #f2cc60; font-size: 20px; }
+#custom-browser { color: #ff8a45; font-size: 21px; }
+#custom-terminal { color: @muted; font-size: 19px; }
+#custom-screenshot, #custom-clipboard, #custom-settings { color: @muted; font-size: 17px; }
+
+#custom-start:hover,
+#custom-task-view:hover,
+#custom-files:hover,
+#custom-browser:hover,
+#custom-terminal:hover,
+#custom-screenshot:hover,
+#custom-clipboard:hover,
+#custom-settings:hover,
+#taskbar button:hover,
+#mpris:hover,
+#network:hover,
+#pulseaudio:hover,
+#custom-notification:hover,
+#clock:hover { background: @hover; }
+
+#custom-screenshot:hover,
+#custom-clipboard:hover,
+#custom-settings:hover,
+#custom-task-view:hover { color: @accent; }
+
+/* ------------------------------------------------- ventanas abiertas */
+
+#taskbar { padding: 0 3px; }
+#taskbar button { padding: 0 10px; border-bottom: 3px solid transparent; }
+#taskbar button.active { background: @surface; border-bottom-color: @accent; }
+#taskbar button.minimized { opacity: 0.55; border-bottom-color: rgba(92, 216, 240, 0.35); }
+#taskbar button.urgent { background: rgba(255, 92, 114, 0.30); border-bottom-color: @danger; }
+
+/* ------------------------------------------------------- zona derecha */
+
+#mpris,
+#network,
+#pulseaudio,
+#custom-notification { font-size: 18px; min-width: 28px; padding: 0 7px; }
+
+#tray { padding: 0 8px; }
+#tray > .passive { opacity: 0.6; }
+#tray > .needs-attention { color: @danger; }
+
+/* En `es_MX` glibc no define «a. m.»/«p. m.», así que un reloj de doce horas
+   saldría sin indicador y sería ambiguo. Veinticuatro horas, como el sistema. */
+#clock {
+    min-width: 84px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    color: @text;
+}
+
+#custom-show-desktop {
+    min-width: 5px;
+    padding: 0;
+    margin: 0;
+    border-left: 1px solid @line;
+    border-radius: 0;
+}
+
+#custom-show-desktop:hover { background: @accent-dim; }
+#network.disconnected { color: @danger; }
+#pulseaudio.muted { color: @faint; }
+#custom-notification.dnd-notification,
+#custom-notification.dnd-none { color: @faint; }
+
+/* ----------------------------------------------------------- ayudas */
+
+tooltip {
+    background: rgba(15, 19, 28, 0.98);
+    border: 1px solid rgba(92, 216, 240, 0.30);
+    border-radius: 8px;
+}
+
+tooltip label {
+    color: @text;
+    padding: 7px;
+}

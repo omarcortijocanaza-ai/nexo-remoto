@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -u
+
+NEXO_DOCTOR_DIR=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+NEXO_DOCTOR_STATE_DIR=${NEXO_STATE_DIR:-$NEXO_DOCTOR_DIR}
+NEXO_DOCTOR_STATE_FILE=${NEXO_STATE_FILE:-$NEXO_DOCTOR_STATE_DIR/.nexo-state.json}
+NEXO_DOCTOR_PORT=${REMOTE_KEYBOARD_PORT:-8765}
+NEXO_DOCTOR_FAILURES=0
+
+result() {
+  local status=$1 label=$2 detail=${3:-}
+  printf '%-5s %-28s %s\n' "$status" "$label" "$detail"
+  [ "$status" = OK ] || NEXO_DOCTOR_FAILURES=$((NEXO_DOCTOR_FAILURES + 1))
+}
+
+has_command() { command -v "$1" >/dev/null 2>&1 && result OK "$1" || result FALLO "$1" 'no instalado'; }
+
+printf 'NEXO · doctor (%s)\n\n' "$NEXO_DOCTOR_STATE_DIR"
+for command in node hyprctl wf-recorder grim wtype wl-copy wl-paste pactl pw-record; do has_command "$command"; done
+
+if [ -r "$NEXO_DOCTOR_STATE_FILE" ]; then
+  mode=$(stat -c '%a' "$NEXO_DOCTOR_STATE_FILE" 2>/dev/null || true)
+  case "$mode" in 600|640) result OK 'permisos de estado' "$mode" ;; *) result FALLO 'permisos de estado' "${mode:-desconocidos}" ;; esac
+  NEXO_DOCTOR_TOKEN=$(node -e "try{const s=require(process.argv[1]);process.stdout.write(String(s.token||''))}catch{}" "$NEXO_DOCTOR_STATE_FILE")
+else
+  NEXO_DOCTOR_TOKEN=''
+  result FALLO 'archivo de estado' 'no legible'
+fi
+
+if curl -fsS --max-time 3 "http://127.0.0.1:$NEXO_DOCTOR_PORT/health" >/dev/null 2>&1; then
+  result OK 'servidor HTTP' "puerto $NEXO_DOCTOR_PORT"
+else result FALLO 'servidor HTTP' "puerto $NEXO_DOCTOR_PORT"; fi
+
+if [ -n "$NEXO_DOCTOR_TOKEN" ]; then
+  NEXO_DOCTOR_INFO=$(curl -fsS --max-time 3 "http://127.0.0.1:$NEXO_DOCTOR_PORT/info?token=$NEXO_DOCTOR_TOKEN" 2>/dev/null || true)
+  if [ -n "$NEXO_DOCTOR_INFO" ]; then
+    dimensions=$(jq -r '"\(.width)x\(.height) · \(.name)"' <<<"$NEXO_DOCTOR_INFO" 2>/dev/null || true)
+    result OK 'captura/monitor' "$dimensions"
+  elif [ "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "http://127.0.0.1:$NEXO_DOCTOR_PORT/info?token=$NEXO_DOCTOR_TOKEN" 2>/dev/null)" = 401 ]; then
+    dimensions=$(hyprctl -j monitors 2>/dev/null | jq -r 'map(select(.focused))[0] // .[0] | "\(.width)x\(.height) · \(.name)"' 2>/dev/null || true)
+    result OK 'captura/monitor' "${dimensions:-protegido} · login activo"
+  else result FALLO 'captura/monitor' 'sin respuesta'; fi
+fi
+
+if [ -r "$NEXO_DOCTOR_STATE_DIR/.nexo-auth.json" ]; then result OK 'credenciales originales' 'configuradas';
+elif [ "$NEXO_DOCTOR_PORT" = 8765 ]; then result FALLO 'credenciales originales' 'ejecuta nexo-control credentials init';
+else result OK 'acceso NEXO libre' 'sin login adicional'; fi
+
+if pgrep -af 'cloudflared.*tunnel' >/dev/null 2>&1; then result OK 'túnel temporal' 'proceso activo'; else result FALLO 'túnel temporal' 'detenido'; fi
+if gst-inspect-1.0 nvh264enc >/dev/null 2>&1; then result OK 'NVENC' 'plugin disponible'; else result FALLO 'NVENC' 'plugin no disponible'; fi
+
+NEXO_HOST_OUTPUT=${NEXO_HOST_OUTPUT:-NEXO-HOST}
+if hyprctl -j monitors >/dev/null 2>&1 && hyprctl -j monitors | jq -e --arg name "$NEXO_HOST_OUTPUT" '.[] | select(.name==$name and .width==1920 and .height==1080)' >/dev/null 2>&1; then
+  result OK "$NEXO_HOST_OUTPUT" '1920x1080'
+elif hyprctl -j monitors 2>/dev/null | jq -e --arg name "$NEXO_HOST_OUTPUT" '.[] | select(.name==$name)' >/dev/null 2>&1; then result FALLO "$NEXO_HOST_OUTPUT" 'resolución incorrecta';
+else result OK "$NEXO_HOST_OUTPUT" 'no presente en esta instancia'; fi
+
+# VKMS quedó descartado: sobre NVIDIA el compositor no puede presentar en esa
+# tarjeta y reintenta el modeset cientos de veces por segundo.
+if lsmod 2>/dev/null | grep -q '^vkms'; then result FALLO 'VKMS' 'cargado; ejecuta el instalador para retirarlo'; else result OK 'VKMS' 'retirado'; fi
+
+printf '\nResultado: '
+if [ "$NEXO_DOCTOR_FAILURES" -eq 0 ]; then printf 'todo correcto.\n'; exit 0; fi
+printf '%s comprobaciones requieren atención.\n' "$NEXO_DOCTOR_FAILURES"
+exit 1

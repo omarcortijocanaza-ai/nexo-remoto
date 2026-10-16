@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -u
+
+# Identidad de la aplicación activa para la barra superior.
+# Devuelve nombre reconocible, icono y estado, además del texto de ayuda que
+# explica qué hace el clic sobre ese nombre.
+
+window=$(hyprctl -j activewindow 2>/dev/null) || window='{}'
+class=$(jq -r '.class // .initialClass // empty' <<<"$window")
+title=$(jq -r '.title // empty' <<<"$window")
+pinned=$(jq -r '.pinned // false' <<<"$window")
+state=app
+
+case "${class,,}" in
+  *firefox*) label='󰈹  Firefox' ;;
+  *dolphin*) label='󰉋  Explorador' ;;
+  *kitty*) label='󰆍  Terminal' ;;
+  *pavucontrol*) label='󰝞  Sonido' ;;
+  *swappy*) label='󰋩  Editor de capturas' ;;
+  *zenity*) label='󰋼  Aviso de NEXO' ;;
+  *imv*|*eog*|*loupe*) label='󰋩  Imágenes' ;;
+  *mpv*|*vlc*) label='󰐊  Reproductor' ;;
+  *libreoffice*) label='󰈙  Documentos' ;;
+  *rofi*) label='󰍉  Búsqueda' ;;
+  '') label='NEXO'; state=desktop ;;
+  *) label="󰘔  ${class}" ;;
+esac
+
+[ "$pinned" = true ] && label="$label  󰐃"
+
+if [ "$state" = desktop ]; then
+  tooltip='Escritorio NEXO · sin ventana activa'
+else
+  tooltip="${title:-$class}"$'\n''Clic: acciones de la ventana (Alt+Espacio)'
+fi
+
+jq -cn --arg text "$label" --arg tooltip "$tooltip" --arg class "$state" \
+  '{text:$text, tooltip:$tooltip, class:[$class]}'

@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# NEXO · biblioteca común de menús de la experiencia Windows.
+#
+# La cargan la configuración rápida, el portapapeles, las capturas, la hoja de
+# atajos y el menú de la ventana. Existe para que todos abran exactamente el
+# mismo tipo de diálogo: mismo tema, mismos iconos, mismo comportamiento del
+# ratón. Antes cada script repetía la línea de rofi y bastaba olvidar una
+# opción para que un menú se comportara distinto del resto.
+
+# `-icon-theme` va en la línea de órdenes y no sólo dentro del tema: con
+# `-no-config`, rofi no toma el tema de iconos del bloque `configuration` del
+# archivo .rasi y la cuadrícula sale con los nombres pero sin iconos.
+NX_DIALOG_THEME=${NX_DIALOG_THEME:-/etc/nexo/windows-dialog.rasi}
+NX_LIB=${NX_LIB:-/usr/local/lib/nexo}
+
+# nx_row "Etiqueta" "nombre-de-icono"
+# Escribe una fila de menú con icono, en el formato que entiende rofi.
+nx_row() {
+  printf '%s\0icon\x1f%s\n' "$1" "${2:-application-x-executable}"
+}
+
+# Sin `-normal-window`: rofi se dibuja como capa, que es su modo nativo en
+# Wayland. Con ventana normal el clic sobre una casilla cerraba el menú sin
+# abrir nada. En capa, y con puntero virtual —el mismo camino que usa el cliente
+# remoto—, el clic simple abre lo que está bajo el cursor; se comprobó con clics
+# sintéticos sobre casillas concretas. El doble clic vale también, por si el
+# cliente envía el clic sin movimiento previo.
+
+# nx_menu "Título" "Mensaje de estado" [título-de-ventana] < filas
+# Devuelve por salida estándar la etiqueta elegida, o nada si se canceló.
+nx_menu() {
+  local prompt=$1 mesg=${2:-} title=${3:-NEXO}
+  local -a options=(
+    -no-config -dmenu -i
+    -p "$prompt"
+    -theme "$NX_DIALOG_THEME"
+    -show-icons -icon-theme 'Papirus-Dark'
+    -window-title "$title"
+    -click-to-exit -hover-select
+    -me-select-entry '' -me-accept-entry 'MousePrimary,MouseDPrimary'
+  )
+  [ -n "$mesg" ] && options+=(-mesg "$mesg")
+  rofi "${options[@]}"
+}
+
+# nx_notify "Título" "Cuerpo" [icono]
+nx_notify() {
+  notify-send -a NEXO -i "${3:-dialog-information}" "$1" "${2:-}" 2>/dev/null || true
+}
+
+# nx_volume_text — «45 %» o «45 % · silenciado», para la línea de estado.
+nx_volume_text() {
+  local raw percent
+  raw=$(wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null) || { printf 'sin audio'; return; }
+  percent=$(awk '{printf "%d", $2 * 100}' <<<"$raw" 2>/dev/null)
+  case "$raw" in
+    *MUTED*) printf '%s %% · silenciado' "${percent:-0}" ;;
+    *) printf '%s %%' "${percent:-0}" ;;
+  esac
+}
+
+# nx_network_text — nombre de la conexión activa del equipo.
+nx_network_text() {
+  local connection
+  connection=$(nmcli -t -f GENERAL.CONNECTION device show 2>/dev/null |
+    sed -n 's/^GENERAL\.CONNECTION://p' | sed '/^--$/d' | head -1)
+  printf '%s' "${connection:-sin conexión}"
+}
+
+# nx_dnd_text — estado del modo No molestar.
+nx_dnd_text() {
+  case "$(swaync-client -D 2>/dev/null)" in
+    true) printf 'no molestar' ;;
+    false) printf 'avisos activos' ;;
+    *) printf 'avisos' ;;
+  esac
+}
+
+# nx_focus_dialog PID — trae al frente una ventana de zenity recién abierta.
+# Sin esto, un diálogo puede quedar detrás de la ventana activa y parecer que
+# el botón no hizo nada.
+nx_focus_dialog() {
+  local pid=$1 _
+  for _ in $(seq 1 20); do
+    if hyprctl -j clients 2>/dev/null | jq -e --argjson pid "$pid" \
+        '.[] | select(.pid == $pid)' >/dev/null; then
+      hyprctl dispatch focuswindow "pid:$pid" >/dev/null 2>&1
+      return 0
+    fi
+    sleep 0.05
+  done
+  return 0
+}

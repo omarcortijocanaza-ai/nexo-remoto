@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+set -u
+
+NEXO_SCRIPT=$(readlink -f -- "${BASH_SOURCE[0]}")
+NEXO_DIR=$(CDPATH= cd -- "$(dirname -- "$NEXO_SCRIPT")" && pwd)
+PID_FILE="$NEXO_DIR/.nexo-launcher.pid"
+LOG_FILE="$NEXO_DIR/nexo-runtime.log"
+STATE_FILE="$NEXO_DIR/.nexo-state.json"
+
+is_running() {
+  curl -fsS --max-time 2 http://127.0.0.1:8765/health >/dev/null 2>&1
+}
+
+state_value() {
+  /usr/bin/node -e "try{const s=require(process.argv[1]);process.stdout.write(String(s[process.argv[2]]||''))}catch{}" "$STATE_FILE" "$1"
+}
+
+show_access() {
+  local local_url remote_url token remote_access
+  local_url=$(state_value localUrl)
+  remote_url=$(state_value remoteUrl)
+  token=$(state_value token)
+  if [ -n "$remote_url" ] && [ -n "$token" ]; then
+    remote_access="${remote_url%/}/?token=${token}"
+  else
+    remote_access='conectando…'
+  fi
+  printf 'NEXO activo\nLOCAL: %s\nINTERNET: %s\n' "${local_url:-conectando…}" "$remote_access"
+}
+
+start_nexo() {
+  if is_running; then
+    show_access
+    command -v notify-send >/dev/null && notify-send 'NEXO ya está activo' "$(show_access | tail -n +2)"
+    return 0
+  fi
+  cd "$NEXO_DIR" || return 1
+  nohup env NEXO_MODE=both /usr/bin/node launcher.js >>"$LOG_FILE" 2>&1 </dev/null &
+  printf '%s\n' "$!" >"$PID_FILE"
+  for _ in $(seq 1 40); do
+    is_running && break
+    sleep 0.25
+  done
+  if ! is_running; then
+    command -v notify-send >/dev/null && notify-send -u critical 'NEXO no pudo iniciar' "Revisa $LOG_FILE"
+    return 1
+  fi
+  for _ in $(seq 1 32); do
+    [ -n "$(state_value remoteUrl)" ] && break
+    sleep 0.25
+  done
+  show_access
+  command -v notify-send >/dev/null && notify-send 'NEXO · Local + Internet' "$(show_access | tail -n +2)"
+}
+
+# Un PID caducado dejaba `stop` sin efecto y hacía que `restart` sólo volviera
+# a imprimir los enlaces del proceso viejo. Se comprueba que el PID guardado
+# sea de verdad el lanzador y, si no, se busca por línea de órdenes; después se
+# espera a que el puerto deje de responder antes de dar por hecha la parada.
+stop_nexo() {
+  local pid=''
+  [ -s "$PID_FILE" ] && pid=$(head -n 1 "$PID_FILE")
+  case "$pid" in (*[!0-9]*) pid='' ;; esac
+  if [ -n "$pid" ] && grep -qa 'launcher\.js' "/proc/$pid/cmdline" 2>/dev/null; then
+    kill -TERM "$pid" 2>/dev/null || true
+  else
+    pkill -TERM -f '/usr/bin/node launcher.js' 2>/dev/null || true
+  fi
+  rm -f "$PID_FILE"
+  for _ in $(seq 1 40); do
+    is_running || break
+    sleep 0.25
+  done
+  command -v notify-send >/dev/null && notify-send 'NEXO detenido' 'Acceso local y remoto cerrados'
+}
+
+manage_credentials() {
+  local action=${1:-status} username password confirmation
+  case "$action" in
+    status) /usr/bin/node "$NEXO_DIR/auth-manager.js" status ;;
+    init) /usr/bin/node "$NEXO_DIR/auth-manager.js" init "${2:-Letzus}" ;;
+    set|cambiar)
+      username=${2:-Letzus}
+      printf 'Nueva contraseña para %s: ' "$username" >&2
+      IFS= read -r -s password
+      printf '\nRepite la contraseña: ' >&2
+      IFS= read -r -s confirmation
+      printf '\n' >&2
+      [ "$password" = "$confirmation" ] || { printf 'Las contraseñas no coinciden.\n' >&2; return 1; }
+      printf '%s' "$password" | /usr/bin/node "$NEXO_DIR/auth-manager.js" set "$username" || return
+      if is_running; then stop_nexo; sleep 2; start_nexo; fi
+      ;;
+    *) printf 'Uso: nexo-control credentials {status|init [usuario]|set [usuario]}\n' >&2; return 2 ;;
+  esac
+}
+
+# El código lo genera quien tiene acceso local a la máquina y el servidor sólo
+# lo lee del archivo de estado: así emparejar no necesita ningún endpoint
+# abierto que alguien pudiera invocar desde fuera.
+pair_device() {
+  local minutes=${1:-10}
+  case "$minutes" in (*[!0-9]*|'') printf 'Uso: nexo-control pair [minutos]\n' >&2; return 2 ;; esac
+  /usr/bin/node -e '
+    const { createPairing } = require(process.argv[1] + "/device-manager");
+    const path = require("path");
+    const state = process.env.NEXO_STATE_DIR || process.argv[1];
+    const { code, expiresAt } = createPairing(path.join(state, ".nexo-pairing.json"), Number(process.argv[2]) * 60000);
+    const minutes = Math.round((expiresAt - Date.now()) / 60000);
+    process.stdout.write(`\nCódigo de emparejamiento: ${code}\nVálido ${minutes} min y para un solo dispositivo.\nAbre la dirección de NEXO sin token y escríbelo allí.\n\n`);
+  ' "$NEXO_DIR" "$minutes"
+}
+
+# Rotar invalida los enlaces compartidos antes, que hasta ahora seguían siendo
+# credenciales válidas para siempre. Los aparatos ya emparejados no se enteran:
+# entran con su cookie, que no deriva del token.
+rotate_token() {
+  local respuesta dispositivos
+  [ -s "$STATE_FILE" ] || { printf 'No hay estado de NEXO todavía; inícialo una vez antes de rotar.\n' >&2; return 1; }
+  dispositivos=$(/usr/bin/node "$NEXO_DIR/rotate-token.js" --dispositivos "$NEXO_DIR/.nexo-devices.json" 2>/dev/null || printf 0)
+  printf '\nRotar el enlace de NEXO:\n'
+  printf '  · Los enlaces que ya compartiste dejarán de funcionar.\n'
+  printf '  · Los %s dispositivos emparejados siguen entrando sin hacer nada.\n' "$dispositivos"
+  printf '  · El enlace nuevo sirve igual para emparejar más aparatos.\n'
+  printf '  · La dirección de Internet cambiará, como en cualquier reinicio.\n\n'
+  if [ "${1:-}" != "-y" ] && [ "${1:-}" != "--si" ]; then
+    printf '¿Rotar ahora? [s/N]: '
+    IFS= read -r respuesta || respuesta=''
+    case "$respuesta" in
+      s|S|si|SI|Si|sí|Sí|SÍ) ;;
+      *) printf 'Cancelado. Nada ha cambiado.\n'; return 1 ;;
+    esac
+  fi
+  /usr/bin/node "$NEXO_DIR/rotate-token.js" "$STATE_FILE" "$NEXO_DIR/.nexo-devices.json" || return 1
+  if is_running; then stop_nexo; sleep 1; fi
+  start_nexo || return 1
+  printf '\nSi algún aparato de la lista no lo reconoces, revócalo desde el botón ⓘ.\n'
+}
+
+case "${1:-start}" in
+  start|show) start_nexo ;;
+  link|enlace) show_access ;;
+  pair|emparejar) shift; pair_device "$@" ;;
+  rotate|rotar) shift; rotate_token "$@" ;;
+  status) if is_running; then show_access; else printf 'NEXO detenido\n'; exit 1; fi ;;
+  stop) stop_nexo ;;
+  restart) stop_nexo; sleep 2; start_nexo ;;
+  log) exec tail -n 80 -f "$LOG_FILE" ;;
+  doctor|diagnostico) exec bash "$NEXO_DIR/nexo-doctor" ;;
+  credentials|credenciales) shift; manage_credentials "$@" ;;
+  *) printf 'Uso: nexo-control {start|show|link|pair|rotate|status|stop|restart|log|doctor|credentials}\n' >&2; exit 2 ;;
+esac

@@ -1,0 +1,51 @@
+#!/bin/sh
+# Xsetup - run as root before the login dialog appears
+#
+# NEXO necesita poder ver y escribir en la pantalla de inicio de sesion. Esa
+# pantalla es un servidor X propio de SDDM, con su cookie de autorizacion en
+# /run/sddm/xauth_XXXXXX y permisos de root: sin ayuda, el NEXO del usuario no
+# puede abrirla y se queda con la pantalla en negro (paso el 2026-08-19).
+#
+# Se hacen las dos cosas, por si una falla:
+#   1. Copiar la cookie a /run/nexo-greeter.auth, legible por el grupo del
+#      usuario. Es el metodo fiable: no depende de que DISPLAY venga puesto.
+#   2. `xhost +SI:localuser:` como respaldo. Es control por usuario local del
+#      servidor X, no el viejo `xhost +` abierto a todo el mundo.
+#
+# Y se deja registro en /var/log/nexo-xsetup.log: la primera version silenciaba
+# los errores y por eso no hubo forma de saber que habia pasado.
+#
+# Lo instala ~/Downloads/teclado-remoto/greeter/instalar-greeter
+
+NEXO_USUARIO=Letzus
+NEXO_COOKIE=/run/nexo-greeter.auth
+NEXO_LOG=/var/log/nexo-xsetup.log
+
+{
+    echo "== $(date '+%F %T') Xsetup =="
+    echo "DISPLAY=${DISPLAY:-<vacio>}  XAUTHORITY=${XAUTHORITY:-<vacio>}"
+
+    origen=$XAUTHORITY
+    if [ -z "$origen" ] || [ ! -r "$origen" ]; then
+        # SDDM anuncia la ruta en su registro, pero aqui puede no llegar en el
+        # entorno: se busca la mas reciente.
+        origen=$(ls -t /run/sddm/xauth_* 2>/dev/null | head -1)
+    fi
+
+    if [ -n "$origen" ] && [ -r "$origen" ]; then
+        if install -m 0640 -o root -g "$NEXO_USUARIO" "$origen" "$NEXO_COOKIE"; then
+            echo "cookie copiada de $origen a $NEXO_COOKIE"
+        else
+            echo "ERROR copiando la cookie de $origen"
+        fi
+    else
+        echo "ERROR: no se encontro ninguna cookie en /run/sddm/"
+    fi
+
+    [ -n "$DISPLAY" ] || DISPLAY=:0
+    export DISPLAY
+    /usr/bin/xhost "+SI:localuser:$NEXO_USUARIO" 2>&1
+    echo "xhost salio con $?"
+} >>"$NEXO_LOG" 2>&1
+
+exit 0

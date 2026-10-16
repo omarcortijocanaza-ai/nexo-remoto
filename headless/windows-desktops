@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -u
+
+# Escritorios virtuales, como los de la Vista de tareas de Windows.
+#
+# Hyprland los llama espacios de trabajo. Se exponen los cuatro primeros con
+# nombres reconocibles y el recuento de ventanas de cada uno, más las acciones
+# de mover la ventana actual y volver al escritorio anterior.
+
+NX_LIB=$(dirname -- "${BASH_SOURCE[0]}")
+# shellcheck source=/dev/null
+. "$NX_LIB/windows-menu-lib"
+
+current=$(hyprctl -j activeworkspace 2>/dev/null | jq -r '.id // 1')
+clients=$(hyprctl -j clients 2>/dev/null || echo '[]')
+
+count_for() {
+  jq --argjson id "$1" '[.[] | select(.workspace.id==$id and .mapped==true)] | length' <<<"$clients"
+}
+
+rows() {
+  local id label windows
+  for id in 1 2 3 4; do
+    windows=$(count_for "$id")
+    case "$windows" in
+      0) label="Escritorio $id · vacío" ;;
+      1) label="Escritorio $id · 1 ventana" ;;
+      *) label="Escritorio $id · $windows ventanas" ;;
+    esac
+    [ "$id" = "$current" ] && label="$label · actual"
+    nx_row "$label" virtual-desktops
+  done
+  nx_row 'Mover esta ventana al escritorio siguiente' go-next
+  nx_row 'Mover esta ventana al escritorio anterior' go-previous
+}
+
+choice=$(rows | nx_menu 'Escritorios virtuales' \
+  "Estás en el escritorio $current · Windows+Ctrl+Izquierda o Derecha para cambiar" \
+  'NEXO Escritorios') || exit 0
+
+case "$choice" in
+  'Escritorio '*)
+    target=${choice#Escritorio }
+    target=${target%% *}
+    hyprctl dispatch workspace "$target" >/dev/null
+    ;;
+  'Mover esta ventana al escritorio siguiente')
+    hyprctl dispatch movetoworkspace r+1 >/dev/null
+    ;;
+  'Mover esta ventana al escritorio anterior')
+    hyprctl dispatch movetoworkspace r-1 >/dev/null
+    ;;
+esac

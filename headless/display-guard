@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -u
+
+HOST_USER=${NEXO_HOST_USER:-Letzus}
+HOST_UID=${NEXO_HOST_UID:-1000}
+REMOTE_USER=${NEXO_REMOTE_USER:-nexo}
+PARENT_ENV=${NEXO_PARENT_ENV:-/var/lib/nexo-session/parent-wayland.env}
+HOST_OUTPUT=${NEXO_HOST_OUTPUT:-NEXO-HOST}
+HOST_WORKSPACE=${NEXO_HOST_WORKSPACE:-11}
+HOST_RUNTIME=/run/user/$HOST_UID
+
+value() { sed -n "s/^$1=//p" "$PARENT_ENV" | head -n 1; }
+
+while [ ! -r "$PARENT_ENV" ]; do sleep 1; done
+PARENT_SOCKET=$(value WAYLAND_DISPLAY)
+HYPR_SIGNATURE=$(value HYPRLAND_INSTANCE_SIGNATURE)
+WAYLAND_NAME=${PARENT_SOCKET##*/}
+# El nombre real lo decide `prepare-nested-parent` al arrancar la sesión: si el
+# vigilante usara el suyo, repondría una salida distinta de la que existe.
+HOST_OUTPUT=$(value HOST_OUTPUT || true)
+[ -n "$HOST_OUTPUT" ] || HOST_OUTPUT=${NEXO_HOST_OUTPUT:-NEXO-HOST}
+
+run_host() {
+  /usr/bin/runuser -u "$HOST_USER" -- env XDG_RUNTIME_DIR="$HOST_RUNTIME" \
+    WAYLAND_DISPLAY="$WAYLAND_NAME" HYPRLAND_INSTANCE_SIGNATURE="$HYPR_SIGNATURE" "$@"
+}
+
+repair() {
+  local nested_pid client prior_focus focus_pid
+  if ! run_host hyprctl -j monitors | jq -e --arg name "$HOST_OUTPUT" \
+    '.[] | select(.name==$name and .width==1920 and .height==1080)' >/dev/null 2>&1; then
+    run_host hyprctl keyword monitor "$HOST_OUTPUT,1920x1080@60,auto-right,1" >/dev/null || return
+    sleep 1
+  fi
+  nested_pid=$(pgrep -u "$REMOTE_USER" -n -x Hyprland 2>/dev/null || true)
+  [ -n "$nested_pid" ] || return
+  client=$(run_host hyprctl -j clients | jq --argjson pid "$nested_pid" '.[] | select(.pid==$pid)')
+  # Sin ventana anidada no hay nada que reparar: `dispatch fullscreen` actuaría
+  # sobre la ventana enfocada del anfitrión y la pondría en pantalla completa.
+  [ -n "$client" ] || return
+  jq -e '.fullscreen==2 and .size[0]==1920 and .size[1]==1080' <<<"$client" >/dev/null 2>&1 && return
+  prior_focus=$(run_host hyprctl -j activewindow | jq -r '.address // empty')
+  run_host hyprctl eval "hl.dispatch(hl.dsp.window.move({ workspace = \"$HOST_WORKSPACE\", follow = false, window = \"pid:$nested_pid\" }))" >/dev/null || true
+  run_host hyprctl eval "hl.dispatch(hl.dsp.focus({ window = \"pid:$nested_pid\" }))" >/dev/null || true
+  client=$(run_host hyprctl -j clients | jq --argjson pid "$nested_pid" '.[] | select(.pid==$pid)')
+  if ! jq -e '.fullscreen==2' <<<"$client" >/dev/null 2>&1; then
+    # `fullscreen 0` alterna la ventana activa: sólo se envía si el foco quedó
+    # realmente en la anidada, nunca sobre una ventana del anfitrión.
+    focus_pid=$(run_host hyprctl -j activewindow | jq -r '.pid // empty')
+    [ "$focus_pid" = "$nested_pid" ] && run_host hyprctl eval 'hl.dispatch(hl.dsp.window.fullscreen({ mode = "fullscreen", action = "set", window = "activewindow" }))' >/dev/null
+  fi
+  if [ -n "$prior_focus" ] && [ "$prior_focus" != 0x0 ]; then run_host hyprctl eval "hl.dispatch(hl.dsp.focus({ window = \"address:$prior_focus\" }))" >/dev/null || true; fi
+}
+
+while true; do repair; sleep 5; done

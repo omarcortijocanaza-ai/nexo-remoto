@@ -1,0 +1,83 @@
+[Unit]
+Description=Nexo · sesión Hyprland remota independiente
+Documentation=file:/opt/nexo/PLAN-SESION-INDEPENDIENTE.md
+After=systemd-logind.service display-manager.service
+Wants=nexo-display-guard.service
+ConditionPathExists=/dev/dri
+
+[Service]
+Type=simple
+User=nexo
+Group=nexo
+WorkingDirectory=/home/nexo
+SupplementaryGroups=video render
+PAMName=nexo-headless
+RuntimeDirectory=nexo-session
+RuntimeDirectoryMode=0700
+Environment=XDG_SESSION_CLASS=user
+Environment=XDG_SESSION_TYPE=wayland
+Environment=XDG_CONFIG_HOME=/home/nexo/.config
+Environment=XDG_CACHE_HOME=/home/nexo/.cache
+Environment=XDG_STATE_HOME=/home/nexo/.local/state
+Environment=NEXO_RUNTIME_DIR=/run/nexo-session
+Environment=NEXO_STATE_DIR=/var/lib/nexo-session
+Environment=NEXO_PARENT_ENV=/var/lib/nexo-session/parent-wayland.env
+Environment=NEXO_HOST_USER=Letzus
+Environment=NEXO_HOST_UID=1000
+Environment=NEXO_HOST_OUTPUT=NEXO-HOST
+Environment=NEXO_HOST_WORKSPACE=11
+Environment=NEXO_STATE_MODE=640
+Environment=NEXO_MODE=remote
+Environment=NEXO_SESSION_KIND=independent
+Environment=NEXO_MONITOR=WAYLAND-1
+Environment=REMOTE_KEYBOARD_PORT=8766
+Environment=NEXO_GPU=1
+Environment=NEXO_GPU_WEBRTC_PORT=9091
+Environment=NEXO_GPU_RTP_PORT=5005
+Environment=NEXO_CPU_MAX_FPS=30
+Environment=NEXO_CPU_MAX_HEIGHT=720
+ExecStartPre=+/usr/local/lib/nexo/prepare-nested-parent
+ExecStart=/usr/local/lib/nexo/start-session
+ExecStartPost=+/usr/local/lib/nexo/place-nested-window
+ExecStartPost=/usr/local/lib/nexo/wait-ready
+ExecStop=+/usr/bin/loginctl terminate-user nexo
+# PAMName abre una sesión de usuario propia, así que los procesos de nexo viven
+# fuera del cgroup del servicio: un arranque fallido los dejaba huérfanos y el
+# reintento levantaba una segunda pila completa sobre la primera. Terminar al
+# usuario también aquí cubre la ruta de fallo, no sólo la de parada limpia.
+ExecStopPost=+-/usr/bin/loginctl terminate-user nexo
+ExecStopPost=+/usr/local/lib/nexo/cleanup-nested-parent
+Restart=on-failure
+RestartSec=3
+# La espera de la ventana anidada puede llegar a 60 s en frío; con los 90 s por
+# omisión systemd cortaba el arranque antes de que place-nested-window fallara.
+TimeoutStartSec=180
+TimeoutStopSec=8
+KillMode=control-group
+CPUWeight=50
+CPUQuota=400%
+MemoryHigh=8G
+MemoryMax=12G
+TasksMax=1024
+IOWeight=50
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+InaccessiblePaths=/home/Letzus
+ReadWritePaths=/home/nexo /var/lib/nexo-session
+RestrictSUIDSGID=true
+LockPersonality=true
+
+# A PROPOSITO NO HAY [Install]: la sesion invitada NO arranca con el equipo ni
+# con la sesion fisica. Es una pila completa (Hyprland anidado, waybar, pipewire,
+# gpu-stream, cloudflared) y solo tiene sentido cuando alguien va a entrar de
+# verdad; el resto del tiempo son recursos regalados.
+#
+# Se levanta a mano, cuando se va a dar acceso:
+#     nexo-session-control start      (o el lanzador "NEXO · sesion invitada")
+# y se baja con:
+#     nexo-session-control stop
+#
+# La sesion de NEXO para usar ESTA computadora es otra cosa (nexo-control,
+# puerto 8765) y no depende de este servicio.

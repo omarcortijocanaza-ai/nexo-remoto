@@ -1,0 +1,14 @@
+[General]
+ColorScheme=BreezeDark
+Name=Breeze Dark
+TerminalApplication=kitty
+TerminalService=kitty.desktop
+
+[Icons]
+Theme=Papirus-Dark
+
+[KDE]
+SingleClick=false
+
+[KFileDialog Settings]
+Show hidden files=false

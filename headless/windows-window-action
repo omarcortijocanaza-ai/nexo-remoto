@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Acciones de ventana al estilo de Windows: minimizar, maximizar, restaurar,
+# acomodar a media pantalla o a un cuarto, centrar y fijar encima.
+#
+# Las medidas no están escritas a mano: se calculan sobre el área libre del
+# monitor, es decir, descontando la barra superior de título y la barra de
+# tareas. Si alguna de las dos cambia de alto, los acomodos siguen encajando.
+
+action=${1:-}
+window=$(hyprctl -j activewindow 2>/dev/null || echo '{}')
+address=$(jq -r '.address // empty' <<<"$window")
+[ -n "$address" ] || exit 0
+
+read -r MON_W MON_H MON_X MON_Y RES_L RES_T RES_R RES_B < <(
+  hyprctl -j monitors 2>/dev/null |
+    jq -r 'map(select(.focused)) | (.[0] // {}) |
+      "\(.width // 1920) \(.height // 1080) \(.x // 0) \(.y // 0) \(.reserved[0] // 0) \(.reserved[1] // 0) \(.reserved[2] // 0) \(.reserved[3] // 0)"'
+)
+
+GAP=6
+AREA_X=$((MON_X + RES_L + GAP))
+AREA_Y=$((MON_Y + RES_T + GAP))
+AREA_W=$((MON_W - RES_L - RES_R - GAP * 2))
+AREA_H=$((MON_H - RES_T - RES_B - GAP * 2))
+HALF_W=$(((AREA_W - GAP) / 2))
+HALF_H=$(((AREA_H - GAP) / 2))
+RIGHT_X=$((AREA_X + HALF_W + GAP))
+BOTTOM_Y=$((AREA_Y + HALF_H + GAP))
+
+is_fullscreen() { [ "$(jq -r '.fullscreen // 0' <<<"$window")" -gt 0 ]; }
+is_floating() { [ "$(jq -r '.floating // false' <<<"$window")" = true ]; }
+
+# Acomodar exige una ventana flotante y no maximizada: en mosaico las
+# coordenadas exactas las decide el diseño y el movimiento se ignoraría.
+# `fullscreenstate 0 -1` deja la ventana en modo normal sin tocar lo que la
+# aplicación cree de sí misma. Alternar con `fullscreen 1` fallaba en las
+# ventanas que estaban a pantalla completa de verdad: en vez de salir, pasaban
+# a maximizadas y el acomodo se ignoraba.
+unmaximize() { hyprctl dispatch fullscreenstate 0 -1 >/dev/null; }
+
+prepare_free() {
+  is_fullscreen && unmaximize
+  is_floating || hyprctl dispatch setfloating "address:$address" >/dev/null
+}
+
+place() {
+  hyprctl --batch "\
+dispatch resizewindowpixel exact $1 $2,address:$address ; \
+dispatch movewindowpixel exact $3 $4,address:$address" >/dev/null
+}
+
+case "$action" in
+  close)
+    hyprctl dispatch closewindow "address:$address" >/dev/null
+    ;;
+  maximize)
+    hyprctl dispatch fullscreen 1 >/dev/null
+    ;;
+  fullscreen)
+    hyprctl dispatch fullscreen 0 >/dev/null
+    ;;
+  restore)
+    if is_fullscreen; then
+      unmaximize
+    else
+      prepare_free
+      place $((AREA_W * 4 / 5)) $((AREA_H * 9 / 10)) \
+            $((AREA_X + AREA_W / 10)) $((AREA_Y + AREA_H / 20))
+    fi
+    ;;
+  minimize)
+    # Hyprland no implementa minimizar de forma nativa. Un workspace especial
+    # conserva la ventana y su proceso; el botón de la barra de tareas vuelve
+    # a activarla igual que una aplicación minimizada en Windows.
+    hyprctl dispatch movetoworkspacesilent "special:nexo-minimized,address:$address" >/dev/null
+    ;;
+  snap-left)     prepare_free; place "$HALF_W" "$AREA_H" "$AREA_X" "$AREA_Y" ;;
+  snap-right)    prepare_free; place "$HALF_W" "$AREA_H" "$RIGHT_X" "$AREA_Y" ;;
+  snap-top)      prepare_free; place "$AREA_W" "$HALF_H" "$AREA_X" "$AREA_Y" ;;
+  snap-bottom)   prepare_free; place "$AREA_W" "$HALF_H" "$AREA_X" "$BOTTOM_Y" ;;
+  snap-top-left)     prepare_free; place "$HALF_W" "$HALF_H" "$AREA_X" "$AREA_Y" ;;
+  snap-top-right)    prepare_free; place "$HALF_W" "$HALF_H" "$RIGHT_X" "$AREA_Y" ;;
+  snap-bottom-left)  prepare_free; place "$HALF_W" "$HALF_H" "$AREA_X" "$BOTTOM_Y" ;;
+  snap-bottom-right) prepare_free; place "$HALF_W" "$HALF_H" "$RIGHT_X" "$BOTTOM_Y" ;;
+  center)
+    prepare_free
+    place $((AREA_W * 4 / 5)) $((AREA_H * 9 / 10)) \
+          $((AREA_X + AREA_W / 10)) $((AREA_Y + AREA_H / 20))
+    ;;
+  pin)
+    # Fijar sólo tiene sentido en ventanas flotantes; Hyprland ignora la orden
+    # sobre una ventana en mosaico.
+    is_floating || hyprctl dispatch setfloating "address:$address" >/dev/null
+    hyprctl dispatch pin "address:$address" >/dev/null
+    ;;
+  *)
+    printf 'Uso: %s {minimize|maximize|fullscreen|restore|close|center|pin|snap-...}\n' "$0" >&2
+    exit 2
+    ;;
+esac

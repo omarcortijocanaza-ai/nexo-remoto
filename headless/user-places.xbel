@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE xbel>
+<xbel xmlns:bookmark="http://www.freedesktop.org/standards/desktop-bookmarks" xmlns:kdepriv="http://www.kde.org/kdepriv" xmlns:mime="http://www.freedesktop.org/standards/shared-mime-info">
+ <info>
+  <metadata owner="http://www.kde.org">
+   <kde_places_version>4</kde_places_version>
+   <GroupState-Places-IsHidden>false</GroupState-Places-IsHidden>
+   <GroupState-Remote-IsHidden>true</GroupState-Remote-IsHidden>
+   <GroupState-Devices-IsHidden>true</GroupState-Devices-IsHidden>
+   <GroupState-RemovableDevices-IsHidden>true</GroupState-RemovableDevices-IsHidden>
+   <GroupState-Tags-IsHidden>true</GroupState-Tags-IsHidden>
+   <GroupState-SearchFor-IsHidden>true</GroupState-SearchFor-IsHidden>
+   <GroupState-RecentlySaved-IsHidden>true</GroupState-RecentlySaved-IsHidden>
+   <withBaloo>false</withBaloo>
+  </metadata>
+ </info>
+ <bookmark href="file:///home/nexo"><title>Carpeta personal</title><info><metadata owner="http://freedesktop.org"><bookmark:icon name="user-home"/></metadata><metadata owner="http://www.kde.org"><ID>nexo/0</ID><isSystemItem>true</isSystemItem></metadata></info></bookmark>
+ <bookmark href="file:///home/nexo/Escritorio"><title>Escritorio</title><info><metadata owner="http://freedesktop.org"><bookmark:icon name="user-desktop"/></metadata><metadata owner="http://www.kde.org"><ID>nexo/1</ID><isSystemItem>true</isSystemItem></metadata></info></bookmark>
+ <bookmark href="file:///home/nexo/Documentos"><title>Documentos</title><info><metadata owner="http://freedesktop.org"><bookmark:icon name="folder-documents"/></metadata><metadata owner="http://www.kde.org"><ID>nexo/2</ID><isSystemItem>true</isSystemItem></metadata></info></bookmark>
+ <bookmark href="file:///home/nexo/Descargas"><title>Descargas</title><info><metadata owner="http://freedesktop.org"><bookmark:icon name="folder-downloads"/></metadata><metadata owner="http://www.kde.org"><ID>nexo/3</ID><isSystemItem>true</isSystemItem></metadata></info></bookmark>
+ <bookmark href="file:///home/nexo/Imágenes"><title>Imágenes</title><info><metadata owner="http://freedesktop.org"><bookmark:icon name="folder-pictures"/></metadata><metadata owner="http://www.kde.org"><ID>nexo/4</ID><isSystemItem>true</isSystemItem></metadata></info></bookmark>
+ <bookmark href="file:///home/nexo/Música"><title>Música</title><info><metadata owner="http://freedesktop.org"><bookmark:icon name="folder-music"/></metadata><metadata owner="http://www.kde.org"><ID>nexo/5</ID><isSystemItem>true</isSystemItem></metadata></info></bookmark>
+ <bookmark href="file:///home/nexo/Vídeos"><title>Vídeos</title><info><metadata owner="http://freedesktop.org"><bookmark:icon name="folder-videos"/></metadata><metadata owner="http://www.kde.org"><ID>nexo/6</ID><isSystemItem>true</isSystemItem></metadata></info></bookmark>
+ <bookmark href="trash:/"><title>Papelera</title><info><metadata owner="http://freedesktop.org"><bookmark:icon name="user-trash"/></metadata><metadata owner="http://www.kde.org"><ID>nexo/7</ID><isSystemItem>true</isSystemItem></metadata></info></bookmark>
+</xbel>

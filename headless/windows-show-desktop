@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+STATE=${XDG_RUNTIME_DIR:-/run/nexo-session}/nexo-windows-hidden.json
+if [ -s "$STATE" ]; then
+  jq -c '.[]' "$STATE" | while IFS= read -r item; do
+    address=$(jq -r '.address' <<<"$item")
+    workspace=$(jq -r '.workspace' <<<"$item")
+    hyprctl dispatch movetoworkspacesilent "$workspace,address:$address" >/dev/null || true
+  done
+  rm -f "$STATE"
+  exit 0
+fi
+
+workspace=$(hyprctl -j activeworkspace | jq -r '.id')
+hyprctl -j clients | jq --argjson workspace "$workspace" \
+  '[.[] | select(.workspace.id==$workspace and .mapped==true) | {address,workspace:.workspace.id}]' >"$STATE"
+jq -r '.[].address' "$STATE" | while IFS= read -r address; do
+  hyprctl dispatch movetoworkspacesilent "special:nexo-desktop,address:$address" >/dev/null || true
+done

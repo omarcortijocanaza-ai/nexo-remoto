@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -u
+
+# Menú de la ventana activa (Alt+Espacio, o clic en el nombre de la aplicación
+# de la barra superior). Equivale al menú que en Windows aparece al pulsar el
+# icono de la esquina de una ventana, con los acomodos añadidos.
+
+NX_LIB=$(dirname -- "${BASH_SOURCE[0]}")
+# shellcheck source=/dev/null
+. "$NX_LIB/windows-menu-lib"
+
+window=$(hyprctl -j activewindow 2>/dev/null || echo '{}')
+title=$(jq -r '.title // empty' <<<"$window")
+class=$(jq -r '.class // .initialClass // empty' <<<"$window")
+fullscreen=$(jq -r '.fullscreen // 0' <<<"$window")
+pinned=$(jq -r '.pinned // false' <<<"$window")
+
+if [ -z "$class" ]; then
+  nx_row 'No hay ninguna ventana activa' dialog-information |
+    nx_menu 'Ventana' 'Abre una aplicación desde Inicio y vuelve a intentarlo.' \
+      'NEXO Ventana' >/dev/null
+  exit 0
+fi
+
+if [ "$fullscreen" -gt 0 ]; then
+  size_label='Restaurar el tamaño'
+  size_icon=view-restore
+else
+  size_label='Maximizar'
+  size_icon=view-fullscreen
+fi
+
+if [ "$pinned" = true ]; then
+  pin_label='Dejar de mostrar siempre encima'
+else
+  pin_label='Mostrar siempre encima'
+fi
+
+choice=$(
+  {
+    nx_row "$size_label"                    "$size_icon"
+    nx_row 'Minimizar'                      window-minimize
+    nx_row 'Media pantalla izquierda'       go-previous
+    nx_row 'Media pantalla derecha'         go-next
+    nx_row 'Un cuarto · arriba a la izquierda' view-restore
+    nx_row 'Un cuarto · arriba a la derecha'   view-restore
+    nx_row 'Un cuarto · abajo a la izquierda'  view-restore
+    nx_row 'Un cuarto · abajo a la derecha'    view-restore
+    nx_row 'Centrar en la pantalla'         zoom-fit-best
+    nx_row 'Pantalla completa'              view-fullscreen
+    nx_row "$pin_label"                     object-select
+    nx_row 'Cerrar'                         window-close
+  } | nx_menu 'Ventana' "${title:-$class}" 'NEXO Ventana'
+) || exit 0
+
+act() { "$NX_LIB/windows-window-action" "$1"; }
+
+case "$choice" in
+  'Maximizar') act maximize ;;
+  'Restaurar el tamaño') act restore ;;
+  'Minimizar') act minimize ;;
+  'Media pantalla izquierda') act snap-left ;;
+  'Media pantalla derecha') act snap-right ;;
+  'Un cuarto · arriba a la izquierda') act snap-top-left ;;
+  'Un cuarto · arriba a la derecha') act snap-top-right ;;
+  'Un cuarto · abajo a la izquierda') act snap-bottom-left ;;
+  'Un cuarto · abajo a la derecha') act snap-bottom-right ;;
+  'Centrar en la pantalla') act center ;;
+  'Pantalla completa') act fullscreen ;;
+  'Mostrar siempre encima'|'Dejar de mostrar siempre encima') act pin ;;
+  'Cerrar') act close ;;
+esac

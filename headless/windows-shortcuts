@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+set -u
+
+# Hoja de atajos buscable (Windows+/ y Configuración rápida).
+#
+# La guía del Escritorio sigue existiendo, pero abrir un archivo de texto para
+# recordar un atajo es justo lo que nadie hace. Aquí se escribe «pantalla» o
+# «cerrar» y aparece la combinación. Elegir una fila ejecuta la acción, así que
+# también sirve como menú para quien prefiere no usar el teclado.
+
+NX_LIB=$(dirname -- "${BASH_SOURCE[0]}")
+# shellcheck source=/dev/null
+. "$NX_LIB/windows-menu-lib"
+
+choice=$(
+  {
+    nx_row 'Windows · abrir el menú Inicio'                    system-search
+    nx_row 'Windows+S · buscar aplicaciones'                   system-search
+    nx_row 'Windows+E · abrir el Explorador'                   system-file-manager
+    nx_row 'Windows+R · cuadro Ejecutar'                       system-run
+    nx_row 'Windows+V · historial del portapapeles'            edit-paste
+    nx_row 'Windows+Shift+S · recortar la pantalla'            applets-screenshooter
+    nx_row 'Impr Pant · capturar la pantalla completa'         video-display
+    nx_row 'Windows+I · configuración rápida'                  preferences-system
+    nx_row 'Windows+N · centro de notificaciones'              notification-active
+    nx_row 'Windows+D · mostrar el escritorio'                 user-desktop
+    nx_row 'Windows+Tab · vista de tareas'                     view-list-icons
+    nx_row 'Windows+Arriba · maximizar la ventana'             view-fullscreen
+    nx_row 'Windows+Abajo · restaurar la ventana'              view-restore
+    nx_row 'Windows+Izquierda o Derecha · media pantalla'      preferences-system-windows
+    nx_row 'Windows+Ctrl+Izquierda o Derecha · cambiar de escritorio' virtual-desktops
+    nx_row 'Windows+1, 2, 3 · abrir Explorador, Firefox o Terminal' view-list-icons
+    nx_row 'Alt+Tab · cambiar de ventana'                      window-new
+    nx_row 'Alt+F4 · cerrar la ventana'                        window-close
+    nx_row 'Alt+Espacio · acciones de la ventana'              preferences-system-windows
+    nx_row 'Ctrl+Alt+T · abrir la Terminal'                    utilities-terminal
+    nx_row 'Clic derecho en el fondo · menú del escritorio'    user-desktop
+    nx_row 'Fondo de pantalla · cambiar la imagen'             preferences-desktop-theme
+    nx_row 'Windows+/ · volver a ver esta lista'               input-keyboard
+  } | nx_menu 'Atajos de teclado' \
+      'Escribe para filtrar · Enter ejecuta el atajo elegido' \
+      'NEXO Atajos'
+) || exit 0
+
+case "$choice" in
+  'Windows · abrir el menú Inicio'|'Windows+S'*) exec "$NX_LIB/windows-start-menu" ;;
+  'Windows+E'*) exec dolphin ;;
+  'Windows+R'*) exec "$NX_LIB/windows-run-dialog" ;;
+  'Windows+V'*) exec "$NX_LIB/windows-clipboard" ;;
+  'Windows+Shift+S'*) exec "$NX_LIB/windows-screenshot" region ;;
+  'Impr Pant'*) exec "$NX_LIB/windows-screenshot" full ;;
+  'Windows+I'*) exec "$NX_LIB/windows-quick-settings" ;;
+  'Windows+N'*) exec swaync-client -t -sw ;;
+  'Windows+D'*) exec "$NX_LIB/windows-show-desktop" ;;
+  'Windows+Tab'*) exec "$NX_LIB/windows-task-view" ;;
+  'Windows+Arriba'*) exec "$NX_LIB/windows-window-action" maximize ;;
+  'Windows+Abajo'*) exec "$NX_LIB/windows-window-action" restore ;;
+  'Windows+Izquierda'*) exec "$NX_LIB/windows-window-action" snap-left ;;
+  'Windows+Ctrl'*) exec "$NX_LIB/windows-desktops" ;;
+  'Windows+1'*) exec dolphin ;;
+  'Alt+Tab'*) exec "$NX_LIB/windows-task-view" ;;
+  'Alt+F4'*) exec "$NX_LIB/windows-window-action" close ;;
+  'Alt+Espacio'*) exec "$NX_LIB/windows-window-menu" ;;
+  'Ctrl+Alt+T'*) exec kitty ;;
+  'Clic derecho'*) exec "$NX_LIB/windows-quick-settings" ;;
+  'Fondo de pantalla'*) exec "$NX_LIB/windows-wallpaper" ;;
+  'Windows+/'*) exec "$0" ;;
+esac

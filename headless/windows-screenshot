@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+set -u
+
+# Capturas de pantalla, al estilo de «Recorte y anotación» de Windows.
+#
+#   windows-screenshot            menú con las tres formas de capturar
+#   windows-screenshot region     recorte con el ratón   (Windows+Shift+S)
+#   windows-screenshot full       pantalla completa      (Impr Pant)
+#   windows-screenshot window     ventana activa         (Alt+Impr Pant)
+#
+# Cada captura queda en Imágenes/Capturas y además en el portapapeles, para
+# poder pegarla enseguida en cualquier aplicación.
+
+NX_LIB=$(dirname -- "${BASH_SOURCE[0]}")
+# shellcheck source=/dev/null
+. "$NX_LIB/windows-menu-lib"
+
+PICTURES=$(xdg-user-dir PICTURES 2>/dev/null) || PICTURES=''
+DEST_DIR=${PICTURES:-$HOME/Imágenes}/Capturas
+mode=${1:-}
+
+if [ -z "$mode" ]; then
+  choice=$(
+    {
+      nx_row 'Recortar una parte de la pantalla' applets-screenshooter
+      nx_row 'Capturar la pantalla completa'     video-display
+      nx_row 'Capturar la ventana activa'        window-new
+      nx_row 'Abrir la carpeta de capturas'      folder-pictures
+    } | nx_menu 'Captura de pantalla' \
+        'Las capturas se guardan en Imágenes/Capturas y se copian al portapapeles.' \
+        'NEXO Captura'
+  ) || exit 0
+  case "$choice" in
+    'Recortar una parte de la pantalla') mode=region ;;
+    'Capturar la pantalla completa') mode=full ;;
+    'Capturar la ventana activa') mode=window ;;
+    'Abrir la carpeta de capturas') mkdir -p "$DEST_DIR"; exec dolphin "$DEST_DIR" ;;
+    *) exit 0 ;;
+  esac
+fi
+
+mkdir -p "$DEST_DIR"
+file="$DEST_DIR/Captura $(date '+%Y-%m-%d %H.%M.%S').png"
+
+case "$mode" in
+  region)
+    # El menú tarda un instante en desaparecer; sin la pausa, el recorte
+    # incluiría el propio diálogo desde el que se pidió la captura.
+    sleep 0.2
+    geometry=$(slurp -b 0f131c99 -c 5cd8f0ff -w 2 2>/dev/null) || exit 0
+    [ -n "$geometry" ] || exit 0
+    grim -g "$geometry" "$file" || exit 1
+    ;;
+  full)
+    grim "$file" || exit 1
+    ;;
+  window)
+    geometry=$(hyprctl -j activewindow 2>/dev/null |
+      jq -r 'if .at then "\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])" else empty end')
+    if [ -n "$geometry" ]; then
+      grim -g "$geometry" "$file" || exit 1
+    else
+      grim "$file" || exit 1
+    fi
+    ;;
+  *)
+    printf 'Uso: %s {region|full|window}\n' "$0" >&2
+    exit 2
+    ;;
+esac
+
+wl-copy --type image/png <"$file" 2>/dev/null || true
+
+# `--wait` es imprescindible: sin él notify-send termina de inmediato y los
+# botones del aviso nunca devuelven nada.
+action=$(notify-send -a NEXO -i "$file" --wait \
+  --action=abrir='Abrir' --action=editar='Editar' --action=carpeta='Carpeta' \
+  'Captura guardada' "$(basename "$file") · copiada al portapapeles" 2>/dev/null) || action=''
+
+case "$action" in
+  abrir) setsid xdg-open "$file" >/dev/null 2>&1 & ;;
+  editar) setsid swappy -f "$file" >/dev/null 2>&1 & ;;
+  carpeta) setsid dolphin "$DEST_DIR" >/dev/null 2>&1 & ;;
+esac

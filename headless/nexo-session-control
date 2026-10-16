@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -u
+
+SERVICE=nexo-headless.service
+STATE_FILE=/var/lib/nexo-session/.nexo-state.json
+LOG_FILE=/var/lib/nexo-session/nexo-runtime.log
+
+is_running() {
+  curl -fsS --max-time 2 http://127.0.0.1:8766/health >/dev/null 2>&1
+}
+
+state_value() {
+  /usr/bin/node -e "try{const s=require(process.argv[1]);process.stdout.write(String(s[process.argv[2]]||''))}catch{}" "$STATE_FILE" "$1"
+}
+
+access_url() {
+  local remote_url token
+  is_running || return 1
+  remote_url=$(state_value remoteUrl)
+  token=$(state_value token)
+  [ -n "$remote_url" ] && [ -n "$token" ] || return 1
+  printf '%s/?token=%s\n' "${remote_url%/}" "$token"
+}
+
+show_access() {
+  local url
+  if url=$(access_url); then
+    printf 'NEXO independiente activo\nINTERNET: %s\n' "$url"
+  else
+    printf 'NEXO independiente está iniciando; el túnel aún no publicó su enlace.\n'
+  fi
+}
+
+start_session() {
+  systemctl start "$SERVICE" || return
+  for _ in $(seq 1 60); do
+    [ "$(systemctl is-active "$SERVICE" 2>/dev/null)" = active ] && is_running && break
+    sleep 0.25
+  done
+  for _ in $(seq 1 40); do
+    access_url >/dev/null && break
+    sleep 0.25
+  done
+  show_access
+  command -v notify-send >/dev/null && notify-send 'NEXO · Sesión independiente' "$(show_access | tail -n +2)"
+}
+
+copy_access() {
+  local url
+  url=$(access_url) || { printf 'El enlace independiente aún no está disponible.\n' >&2; return 1; }
+  printf '%s\n' "$url"
+  command -v wl-copy >/dev/null && printf '%s' "$url" | wl-copy
+  command -v notify-send >/dev/null && notify-send 'NEXO' 'Enlace independiente copiado'
+}
+
+case "${1:-start}" in
+  start|show) start_session ;;
+  stop)
+    systemctl stop "$SERVICE" || exit
+    command -v notify-send >/dev/null && notify-send 'NEXO' 'Sesión independiente detenida'
+    ;;
+  restart) systemctl restart "$SERVICE"; sleep 2; show_access ;;
+  link|enlace) show_access ;;
+  copy|copiar) copy_access ;;
+  status)
+    if systemctl is-active --quiet "$SERVICE"; then show_access
+    else printf 'NEXO independiente detenido\n'; exit 1
+    fi
+    ;;
+  log) exec tail -n 100 -f "$LOG_FILE" ;;
+  *) printf 'Uso: nexo-session-control {start|status|link|copy|stop|restart|log}\n' >&2; exit 2 ;;
+esac

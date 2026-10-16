@@ -1,0 +1,32 @@
+// NEXO: the remote session does not manage disks, network or power of the
+// physical machine.
+//
+// This file is deliberately written in plain ASCII. polkit 127 evaluates rules
+// with duktape, and the previous version of this file -- whose comments carried
+// Spanish accents -- was rejected at load time with "Error loading script".
+// A rule that fails to load is silently ignored: the isolation looks configured
+// but is not, and every udisks or NetworkManager action from the remote session
+// falls back to asking for an administrator password.
+
+polkit.addRule(function(action, subject) {
+    if (subject.user !== "nexo") {
+        return polkit.Result.NOT_HANDLED;
+    }
+
+    var denied = [
+        "org.freedesktop.udisks2.",
+        "org.freedesktop.NetworkManager.",
+        "org.freedesktop.login1.power-off",
+        "org.freedesktop.login1.reboot",
+        "org.freedesktop.login1.suspend",
+        "org.freedesktop.login1.hibernate"
+    ];
+
+    for (var i = 0; i < denied.length; i++) {
+        if (action.id.indexOf(denied[i]) === 0) {
+            return polkit.Result.NO;
+        }
+    }
+
+    return polkit.Result.NOT_HANDLED;
+});

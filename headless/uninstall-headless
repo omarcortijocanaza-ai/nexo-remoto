@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "$(id -u)" -ne 0 ]; then
+  printf 'Ejecuta este desinstalador con sudo.\n' >&2
+  exit 1
+fi
+
+OWNER=${SUDO_USER:-Letzus}
+OWNER_HOME=$(getent passwd "$OWNER" | cut -d: -f6)
+NEXO_UID=$(id -u nexo 2>/dev/null || true)
+
+systemctl disable --now nexo-headless.service nexo-display-guard.service 2>/dev/null || true
+rm -f /etc/systemd/system/nexo-headless.service \
+  /etc/systemd/system/nexo-display-guard.service \
+  /usr/local/bin/nexo-session-control \
+  /usr/local/lib/nexo/start-session \
+  /usr/local/lib/nexo/session-agent \
+  /usr/local/lib/nexo/wait-ready \
+  /usr/local/lib/nexo/prepare-nested-parent \
+  /usr/local/lib/nexo/place-nested-window \
+  /usr/local/lib/nexo/display-guard \
+  /usr/local/lib/nexo/cleanup-nested-parent \
+  /etc/modules-load.d/nexo-vkms.conf \
+  /etc/udev/rules.d/70-nexo-vkms-seat.rules \
+  /etc/udev/rules.d/72-seat-drm-platform-vkms.rules \
+  /etc/pam.d/nexo-headless \
+  /etc/polkit-1/rules.d/49-nexo-session-isolation.rules
+# Los scripts y las configuraciones de la experiencia Windows se retiran por
+# patrón, no por lista: la lista escrita a mano ya se había quedado corta y
+# dejaba archivos sueltos tras desinstalar.
+rm -f /usr/local/lib/nexo/windows-* \
+  /etc/nexo/hyprland-headless.conf \
+  /etc/nexo/waybar.jsonc \
+  /etc/nexo/window-titlebar.jsonc \
+  /etc/nexo/windows-waybar.css \
+  /etc/nexo/*.rasi
+rmdir /etc/nexo /usr/local/lib/nexo 2>/dev/null || true
+
+rm -f "$OWNER_HOME/.local/share/applications/nexo-independent.desktop" \
+  "$OWNER_HOME/.local/share/applications/nexo-independent-copy.desktop" \
+  "$OWNER_HOME/.local/share/applications/nexo-independent-stop.desktop"
+[ -z "$NEXO_UID" ] || rm -f "/etc/systemd/system/user-$NEXO_UID.slice.d/50-nexo-limits.conf"
+for card in /sys/class/drm/card[0-9]*; do
+  [ -e "$card" ] || continue
+  case "$(readlink -f "$card")" in
+    */vkms/*) loginctl attach seat0 "$card" 2>/dev/null || true ;;
+  esac
+done
+systemctl daemon-reload
+
+printf 'Se retiraron servicios, comandos y accesos de Nexo independiente.\n'
+printf 'Se conservaron /home/nexo, /var/lib/nexo-session y /opt/nexo para no borrar datos.\n'
+printf 'VKMS no se descargó porque puede ser usado por otros programas.\n'

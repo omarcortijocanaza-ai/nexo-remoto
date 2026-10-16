@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+set -u
+
+# Configuración rápida (Windows+I, o clic derecho en Inicio).
+# Reúne en un solo sitio lo que en Windows está repartido entre el panel de
+# accesos rápidos y Configuración, sin exponer nada que afecte al equipo físico.
+
+NX_LIB=$(dirname -- "${BASH_SOURCE[0]}")
+# shellcheck source=/dev/null
+. "$NX_LIB/windows-menu-lib"
+
+status="Volumen $(nx_volume_text) · Red: $(nx_network_text) · $(nx_dnd_text)"
+
+choice=$(
+  {
+    nx_row 'Subir volumen'            audio-volume-high
+    nx_row 'Bajar volumen'            audio-volume-low
+    nx_row 'Silenciar o activar'      audio-volume-muted
+    nx_row 'Mezclador de sonido'      multimedia-volume-control
+    nx_row 'Historial del portapapeles' edit-paste
+    nx_row 'Captura de pantalla'      applets-screenshooter
+    nx_row 'Atajos de teclado'        input-keyboard
+    nx_row 'Escritorios virtuales'    virtual-desktops
+    nx_row 'Fondo de pantalla'        preferences-desktop-theme
+    nx_row 'Mostrar el escritorio'    user-desktop
+    nx_row 'Centro de notificaciones' notification-active
+    nx_row 'No molestar'              preferences-desktop-notification
+    nx_row 'Estado de la red'         network-wired
+    nx_row 'Explorador de archivos'   system-file-manager
+    nx_row 'Terminal'                 utilities-terminal
+    nx_row 'Acerca de esta sesión'    help-about
+    nx_row 'Reiniciar la barra de tareas' view-refresh
+    nx_row 'Ayuda de NEXO'            dialog-information
+  } | nx_menu 'Configuración rápida' "$status" 'NEXO Configuración'
+) || exit 0
+
+case "$choice" in
+  'Subir volumen') wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+ ;;
+  'Bajar volumen') wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- ;;
+  'Silenciar o activar') wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle ;;
+  'Mezclador de sonido') setsid pavucontrol >/dev/null 2>&1 & ;;
+  'Historial del portapapeles') exec "$NX_LIB/windows-clipboard" ;;
+  'Captura de pantalla') exec "$NX_LIB/windows-screenshot" ;;
+  'Atajos de teclado') exec "$NX_LIB/windows-shortcuts" ;;
+  'Escritorios virtuales') exec "$NX_LIB/windows-desktops" ;;
+  'Fondo de pantalla') exec "$NX_LIB/windows-wallpaper" ;;
+  'Mostrar el escritorio') exec "$NX_LIB/windows-show-desktop" ;;
+  'Centro de notificaciones') swaync-client -t -sw ;;
+  'No molestar')
+    swaync-client -d -sw
+    nx_notify 'Notificaciones' "Ahora: $(nx_dnd_text)" preferences-desktop-notification
+    ;;
+  'Estado de la red') exec "$NX_LIB/windows-network-info" ;;
+  'Explorador de archivos') setsid dolphin >/dev/null 2>&1 & ;;
+  'Terminal') setsid kitty >/dev/null 2>&1 & ;;
+  'Acerca de esta sesión') exec "$NX_LIB/windows-session-info" ;;
+  'Reiniciar la barra de tareas')
+    # Si Waybar muere o queda en blanco, esto la devuelve sin reiniciar la
+    # sesión ni perder las ventanas abiertas.
+    pkill -x waybar 2>/dev/null || true
+    sleep 0.4
+    setsid waybar -c /etc/nexo/waybar.jsonc -s /etc/nexo/windows-waybar.css >/dev/null 2>&1 &
+    setsid waybar -c /etc/nexo/window-titlebar.jsonc -s /etc/nexo/windows-waybar.css >/dev/null 2>&1 &
+    nx_notify 'Barra de tareas' 'Reiniciada correctamente.' view-refresh
+    ;;
+  'Ayuda de NEXO') exec "$NX_LIB/windows-welcome" --always ;;
+esac
