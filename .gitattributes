@@ -1,0 +1,12 @@
+# Todo en LF por defecto: los scripts bash de Linux se rompen con CRLF.
+* text=auto eol=lf
+# Windows: los .cmd necesitan CRLF; los .ps1 se dejan en CRLF por costumbre.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+# Binarios
+*.webp binary
+*.jpg binary
+*.png binary
+*.exe binary
+bin/wlrctl binary

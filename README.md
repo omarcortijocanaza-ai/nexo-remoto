@@ -1,5 +1,9 @@
 # Teclado remoto
 
+> **Migración a Windows en curso:** el contexto para agentes está en
+> [`AGENTS.md`](AGENTS.md) y el plan completo, con sus prompts, en
+> [`PLAN-MIGRACION-WINDOWS.md`](PLAN-MIGRACION-WINDOWS.md).
+
 NEXO permite ver y controlar una sesión Hyprland desde el celular, con vídeo, audio,
 entrada táctil, teclado y escritorios. Puede publicar acceso local, remoto o ambos.
 Cuando hay varias pantallas, usa por defecto la salida situada en `(0,0)` como monitor
