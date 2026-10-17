@@ -9,12 +9,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 
+	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
 )
@@ -26,6 +28,9 @@ type bridge struct {
 	packets      atomic.Uint64
 	bytes        atomic.Uint64
 	frames       atomic.Uint64
+	pli          atomic.Uint64
+	fir          atomic.Uint64
+	nack         atomic.Uint64
 	timelineInit bool
 	outTimestamp uint32
 	outSequence  uint16
@@ -119,6 +124,13 @@ func (b *bridge) offer(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// C7(a): Registrar el par en b.peers inmediatamente tras crearlo (antes de
+	// SetRemoteDescription y de esperar ICE) para que si la conexión falla durante
+	// esos hasta 4 s, closePeer lo encuentre y lo elimine sin dejar pares zombis.
+	b.mu.Lock()
+	b.peers[pc] = struct{}{}
+	b.mu.Unlock()
+
 	closePeer := func() {
 		b.mu.Lock()
 		_, exists := b.peers[pc]
@@ -132,15 +144,31 @@ func (b *bridge) offer(w http.ResponseWriter, r *http.Request) {
 	}
 	sender, err := pc.AddTrack(b.track)
 	if err != nil {
-		_ = pc.Close()
+		closePeer()
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	go func() {
 		buffer := make([]byte, 1500)
 		for {
-			if _, _, err := sender.Read(buffer); err != nil {
+			n, _, err := sender.Read(buffer)
+			if err != nil {
 				return
+			}
+			// C7(b): Decodificar paquetes RTCP entrantes para contabilizar PLI, FIR y NACK.
+			pkts, err := rtcp.Unmarshal(buffer[:n])
+			if err != nil {
+				continue
+			}
+			for _, p := range pkts {
+				switch p.(type) {
+				case *rtcp.PictureLossIndication:
+					b.pli.Add(1)
+				case *rtcp.FullIntraRequest:
+					b.fir.Add(1)
+				case *rtcp.TransportLayerNack:
+					b.nack.Add(1)
+				}
 			}
 		}
 	}()
@@ -150,19 +178,19 @@ func (b *bridge) offer(w http.ResponseWriter, r *http.Request) {
 		}
 	})
 	if err = pc.SetRemoteDescription(offer); err != nil {
-		_ = pc.Close()
+		closePeer()
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	answer, err := pc.CreateAnswer(nil)
 	if err != nil {
-		_ = pc.Close()
+		closePeer()
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	gathered := webrtc.GatheringCompletePromise(pc)
 	if err = pc.SetLocalDescription(answer); err != nil {
-		_ = pc.Close()
+		closePeer()
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -170,9 +198,6 @@ func (b *bridge) offer(w http.ResponseWriter, r *http.Request) {
 	case <-gathered:
 	case <-time.After(4 * time.Second):
 	}
-	b.mu.Lock()
-	b.peers[pc] = struct{}{}
-	b.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(pc.LocalDescription())
@@ -183,7 +208,16 @@ func (b *bridge) stats(w http.ResponseWriter, _ *http.Request) {
 	peers := len(b.peers)
 	b.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "peers": peers, "packets": b.packets.Load(), "bytes": b.bytes.Load(), "frames": b.frames.Load()})
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"ok":      true,
+		"peers":   peers,
+		"packets": b.packets.Load(),
+		"bytes":   b.bytes.Load(),
+		"frames":  b.frames.Load(),
+		"pli":     b.pli.Load(),
+		"fir":     b.fir.Load(),
+		"nack":    b.nack.Load(),
+	})
 }
 
 func main() {
@@ -216,8 +250,22 @@ func main() {
 		}
 	}()
 	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
-	<-stop
+	if runtime.GOOS == "windows" {
+		signal.Notify(stop, os.Interrupt)
+	} else {
+		signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	}
+	stdinEOF := make(chan struct{})
+	if os.Getenv("NEXO_EXIT_ON_STDIN_EOF") == "1" {
+		go func() {
+			_, _ = io.Copy(io.Discard, os.Stdin)
+			close(stdinEOF)
+		}()
+	}
+	select {
+	case <-stop:
+	case <-stdinEOF:
+	}
 	b.mu.Lock()
 	for pc := range b.peers {
 		_ = pc.Close()
