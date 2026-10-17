@@ -50,24 +50,25 @@ install -o root -g root -m 0644 \
   "$SOURCE_DIR"/DIAGNOSTICO-TECLADO.md \
   "$SOURCE_DIR"/THIRD_PARTY_NOTICES.md /opt/nexo/
 
-# Ningún `require` local puede quedar sin archivo: es preferible que el
-# instalador falle aquí, con el mensaje claro, a que la sesión entre en un
-# bucle de reinicios que el usuario descubre por las ventanas que aparecen.
-missing=''
-for source in /opt/nexo/*.js; do
-  while read -r dependency; do
-    target="/opt/nexo/${dependency#./}"
-    [ -f "$target" ] || [ -f "$target.js" ] || missing="$missing $(basename "$source") -> $dependency"
-  done < <(grep -oE "require\('\./[^']+'\)" "$source" | sed "s/require('//;s/')//")
-done
-[ -z "$missing" ] || { printf 'Faltan módulos en /opt/nexo:%s\n' "$missing" >&2; exit 1; }
-
-for directory in assets bin node_modules windows-helper; do
+for directory in assets bin lib node_modules platform windows-helper; do
   rm -rf "/opt/nexo/$directory"
   cp -a "$SOURCE_DIR/$directory" /opt/nexo/
   chown -R root:root "/opt/nexo/$directory"
   chmod -R a-w "/opt/nexo/$directory"
 done
+
+# Ningún `require` local puede quedar sin archivo: es preferible que el
+# instalador falle aquí, con el mensaje claro, a que la sesión entre en un
+# bucle de reinicios que el usuario descubre por las ventanas que aparecen.
+missing=''
+while IFS= read -r source; do
+  base=$(dirname "$source")
+  while read -r dependency; do
+    target=$(realpath -m "$base/$dependency")
+    [ -f "$target" ] || [ -f "$target.js" ] || [ -f "$target/index.js" ] || missing="$missing ${source#/opt/nexo/} -> $dependency"
+  done < <(grep -oE "require\('\.{1,2}/[^']+'\)" "$source" | sed "s/require('//;s/')//")
+done < <(find /opt/nexo -maxdepth 3 -name '*.js' -not -path '*/node_modules/*')
+[ -z "$missing" ] || { printf 'Faltan módulos en /opt/nexo:%s\n' "$missing" >&2; exit 1; }
 
 install -o root -g root -m 0644 "$SOURCE_DIR/headless/hyprland.conf" /etc/nexo/hyprland-headless.conf
 install -o root -g root -m 0644 "$SOURCE_DIR/headless/waybar.jsonc" /etc/nexo/waybar.jsonc

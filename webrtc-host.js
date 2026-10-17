@@ -1,11 +1,5 @@
 'use strict';
 
-// Sin el entorno de la sesion, wf-recorder y pw-record no encuentran ni el
-// compositor ni el audio: NEXO corre como servicio y no hereda nada.
-const { entornoDe } = require('./entorno');
-
-const { spawn, spawnSync } = require('child_process');
-const fs = require('fs');
 const wrtc = require('@roamhq/wrtc');
 
 const { RTCVideoSource, RTCAudioSource } = wrtc.nonstandard;
@@ -13,9 +7,11 @@ const { RTCVideoSource, RTCAudioSource } = wrtc.nonstandard;
 function even(value) { return Math.max(2, Math.round(value / 2) * 2); }
 
 class WebRtcHost {
-  constructor({ getMonitor, getAudioTarget, onRealtimeEvent, onLog = () => {} }) {
+  constructor({ getMonitor, getAudioTarget, spawnRawVideo, spawnSystemAudio, onRealtimeEvent, onLog = () => {} }) {
     this.getMonitor = getMonitor;
     this.getAudioTarget = getAudioTarget;
+    this.spawnRawVideo = spawnRawVideo;
+    this.spawnSystemAudio = spawnSystemAudio;
     this.onRealtimeEvent = onRealtimeEvent;
     this.onLog = onLog;
     this.peers = new Set();
@@ -25,7 +21,6 @@ class WebRtcHost {
     this.audioTrack = this.audioSource.createTrack();
     this.videoCapture = null;
     this.audioCapture = null;
-    this.videoFifo = null;
     this.videoStream = null;
     this.captureKey = '';
     this.fpsCap = [30, 45, 60].includes(Number(process.env.NEXO_CPU_MAX_FPS)) ? Number(process.env.NEXO_CPU_MAX_FPS) : 60;
@@ -185,10 +180,8 @@ class WebRtcHost {
   stopVideo() {
     if (this.videoCapture) this.videoCapture.kill('SIGTERM');
     if (this.videoStream) this.videoStream.destroy();
-    if (this.videoFifo) fs.rmSync(this.videoFifo, { force: true });
     this.videoCapture = null;
     this.videoStream = null;
-    this.videoFifo = null;
     this.captureKey = '';
     this.framesCaptured = 0;
     this.captureStartedAt = 0;
@@ -197,22 +190,19 @@ class WebRtcHost {
   startVideo(monitor, width, height, key) {
     if (this.videoCapture) this.videoCapture.kill('SIGTERM');
     if (this.videoStream) this.videoStream.destroy();
-    if (this.videoFifo) fs.rmSync(this.videoFifo, { force: true });
     const frameBytes = width * height * 3 / 2;
-    const fifo = `/tmp/nexo-webrtc-${process.pid}-${Date.now()}.raw`;
-    fs.rmSync(fifo, { force: true });
-    const fifoResult = spawnSync('mkfifo', ['-m', '600', fifo]);
-    if (fifoResult.status !== 0) throw new Error(`No se pudo crear el canal de video: ${fifoResult.stderr}`);
-    const videoStream = fs.createReadStream(fifo);
-    this.videoFifo = fifo;
-    this.videoStream = videoStream;
     const fps = this.fps;
     this.framesCaptured = 0;
     this.captureStartedAt = Date.now();
-    const child = spawn('wf-recorder', [
-      '-y', '-o', monitor.name, '-r', String(fps), '-c', 'rawvideo', '-m', 'rawvideo', '-x', 'yuv420p',
-      '-F', `scale=${width}:${height}:flags=fast_bilinear,fps=${fps}`, '-f', fifo
-    ], { stdio: ['ignore', 'ignore', 'pipe'], env: entornoDe() });
+    let spawned;
+    try {
+      spawned = this.spawnRawVideo({ monitor, width, height, fps });
+    } catch (error) {
+      this.onLog(`Captura WebRTC: ${error.message}`);
+      return;
+    }
+    const { child, stream: videoStream } = spawned;
+    this.videoStream = videoStream;
     this.videoCapture = child;
     this.captureKey = key;
     let frame = Buffer.allocUnsafe(frameBytes);
@@ -238,8 +228,6 @@ class WebRtcHost {
     child.on('error', error => this.onLog(`Captura WebRTC: ${error.message}`));
     child.on('close', code => {
       videoStream.destroy();
-      fs.rmSync(fifo, { force: true });
-      if (this.videoFifo === fifo) this.videoFifo = null;
       if (this.videoStream === videoStream) this.videoStream = null;
       if (this.videoCapture !== child) return;
       this.videoCapture = null;
@@ -254,11 +242,13 @@ class WebRtcHost {
     try { target = await this.getAudioTarget(); }
     catch { target = 'alsa_output.pci-0000_09_00.4.analog-stereo'; }
     if (!this.peers.size || this.audioCapture) return;
-    const child = spawn('pw-record', [
-      `--target=${String(target).replace(/\.monitor$/, '')}`,
-      '--properties={ "stream.capture.sink": true, "media.name": "Nexo WebRTC Audio" }',
-      '--format=s16', '--rate=48000', '--channels=2', '--latency=20ms', '--raw', '-'
-    ], { stdio: ['ignore', 'pipe', 'pipe'], env: entornoDe() });
+    let child;
+    try {
+      child = this.spawnSystemAudio({ target, latencyMs: 20 });
+    } catch (error) {
+      this.onLog(`Audio WebRTC: ${error.message}`);
+      return;
+    }
     this.audioCapture = child;
     let errorText = '';
     child.stderr.on('data', data => { if (errorText.length < 4096) errorText += data; });

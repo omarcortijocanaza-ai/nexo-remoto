@@ -50,7 +50,10 @@ test('el archivo de emparejamiento no guarda el código en claro', () => {
   const { code } = createPairing(file);
   const raw = fs.readFileSync(file, 'utf8');
   assert.equal(raw.includes(normalizeCode(code)), false);
-  assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+  // En Windows los modos POSIX (0600) no existen; la protección se hace con ACL en F8/F9.
+  if (process.platform !== 'win32') {
+    assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+  }
   fs.rmSync(directory, { recursive: true });
 });
 

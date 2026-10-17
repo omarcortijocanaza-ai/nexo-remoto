@@ -12,7 +12,9 @@
 // control, y ahí matarla sería justo lo contrario de lo que se busca.
 
 const wrtc = require('@roamhq/wrtc');
-const { MicrofonoVirtual, asegurarDispositivo } = require('./microfono-virtual');
+const { MicrofonoVirtual, asegurarDispositivo } = require(
+  process.platform === 'win32' ? './microfono-virtual-windows' : './microfono-virtual'
+);
 
 const { RTCAudioSink } = wrtc.nonstandard;
 

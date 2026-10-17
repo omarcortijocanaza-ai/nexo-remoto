@@ -105,7 +105,8 @@ function randomPassword() {
 module.exports = { DEFAULT_MAX_AGE_MS, SessionStore, authPath, loadAuth, randomPassword, saveAuth, verifyAuth };
 
 if (require.main === module) {
-  const stateDir = process.env.NEXO_STATE_DIR || __dirname;
+  const { defaultStateDir } = require('./lib/paths');
+  const stateDir = defaultStateDir(__dirname);
   const file = authPath(stateDir, process.env.NEXO_AUTH_FILE);
   const command = process.argv[2] || 'status';
   if (command === 'init') {

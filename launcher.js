@@ -8,8 +8,10 @@ const https = require('https');
 const os = require('os');
 const path = require('path');
 
+const { defaultStateDir } = require('./lib/paths');
+
 const root = __dirname;
-const stateDir = process.env.NEXO_STATE_DIR || root;
+const stateDir = defaultStateDir(root);
 fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
 const mode = (process.env.NEXO_MODE || 'both').toLowerCase();
 if (!['local', 'remote', 'both'].includes(mode)) throw new Error('NEXO_MODE debe ser local, remote o both');
@@ -25,6 +27,7 @@ const children = new Set();
 let serverReady = false;
 let tunnel = null;
 let gpu = null;
+let gpuWindowsNoticed = false;
 let remoteUrl = '';
 let stopping = false;
 let tunnelFailures = 0;
@@ -100,7 +103,18 @@ function startServer() {
 
 function startGpu() {
   if (gpu || stopping || process.env.NEXO_GPU === '0') return;
-  gpu = spawn(process.execPath, ['gpu-stream.js'], { cwd: root, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+  let gpuScript = 'gpu-stream.js';
+  if (process.platform === 'win32') {
+    gpuScript = 'gpu-stream-windows.js';
+    if (!fs.existsSync(path.join(root, gpuScript))) {
+      if (!gpuWindowsNoticed) {
+        gpuWindowsNoticed = true;
+        console.log('Vídeo GPU de Windows todavía no disponible');
+      }
+      return;
+    }
+  }
+  gpu = spawn(process.execPath, [gpuScript], { cwd: root, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
   children.add(gpu);
   gpu.stdout.on('data', data => { gpuBackoff = 1500; process.stdout.write(`[gpu] ${data}`); });
   gpu.stderr.on('data', data => process.stderr.write(`[gpu] ${data}`));
