@@ -9,6 +9,7 @@ const os = require('os');
 const path = require('path');
 
 const { defaultStateDir } = require('./lib/paths');
+const { atomicWriteJson } = require('./lib/safe');
 
 const root = __dirname;
 const stateDir = defaultStateDir(root);
@@ -39,8 +40,7 @@ let gpuBackoff = 1500;
 
 function saveState(extra = {}) {
   const state = { token, mode, port, localUrl: localUrl(), remoteUrl, updatedAt: new Date().toISOString(), ...extra };
-  fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + '\n', { mode: stateMode });
-  fs.chmodSync(statePath, stateMode);
+  atomicWriteJson(statePath, state, stateMode);
 }
 
 function localIp() {

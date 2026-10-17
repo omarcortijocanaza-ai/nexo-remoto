@@ -9,6 +9,7 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { atomicWriteJson } = require('./lib/safe');
 
 const statePath = process.argv[2];
 const devicesPath = process.argv[3] || path.join(path.dirname(statePath), '.nexo-devices.json');
@@ -42,8 +43,7 @@ const next = {
   updatedAt: new Date().toISOString()
 };
 
-fs.writeFileSync(statePath, JSON.stringify(next, null, 2) + '\n', { mode: 0o600 });
-fs.chmodSync(statePath, 0o600);
+atomicWriteJson(statePath, next, 0o600);
 
 const devices = readJson(devicesPath)?.devices?.length || 0;
 process.stdout.write(`Token rotado. Dispositivos emparejados que siguen entrando: ${devices}\n`);

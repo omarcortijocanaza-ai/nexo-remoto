@@ -4,7 +4,10 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const util = require('util');
+const { atomicWriteJson } = require('./lib/safe');
 
+const scryptAsync = util.promisify(crypto.scrypt);
 const KEY_LENGTH = 32;
 const DEFAULT_MAX_AGE_MS = 8 * 60 * 60 * 1000;
 
@@ -14,6 +17,11 @@ function authPath(stateDir, override) {
 
 function hashPassword(password, salt) {
   return crypto.scryptSync(String(password), salt, KEY_LENGTH).toString('base64url');
+}
+
+async function hashPasswordAsync(password, salt) {
+  const derived = await scryptAsync(String(password), salt, KEY_LENGTH);
+  return derived.toString('base64url');
 }
 
 function loadAuth(file) {
@@ -37,9 +45,7 @@ function saveAuth(file, username, password) {
     createdAt: prior?.createdAt || new Date().toISOString(),
     passwordChangedAt: new Date().toISOString()
   };
-  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
-  fs.writeFileSync(file, JSON.stringify(value, null, 2) + '\n', { mode: 0o600 });
-  fs.chmodSync(file, 0o600);
+  atomicWriteJson(file, value, 0o600);
   return value;
 }
 
@@ -50,6 +56,16 @@ function verifyAuth(config, username, password) {
   const userMatches = expectedUser.length === actualUser.length && crypto.timingSafeEqual(expectedUser, actualUser);
   const expectedHash = Buffer.from(config.hash);
   const actualHash = Buffer.from(hashPassword(password, config.salt));
+  return userMatches && expectedHash.length === actualHash.length && crypto.timingSafeEqual(expectedHash, actualHash);
+}
+
+async function verifyAuthAsync(config, username, password) {
+  if (!config || typeof username !== 'string' || typeof password !== 'string') return false;
+  const expectedUser = Buffer.from(config.username);
+  const actualUser = Buffer.from(username);
+  const userMatches = expectedUser.length === actualUser.length && crypto.timingSafeEqual(expectedUser, actualUser);
+  const expectedHash = Buffer.from(config.hash);
+  const actualHash = Buffer.from(await hashPasswordAsync(password, config.salt));
   return userMatches && expectedHash.length === actualHash.length && crypto.timingSafeEqual(expectedHash, actualHash);
 }
 
@@ -102,7 +118,7 @@ function randomPassword() {
   return `${crypto.randomBytes(6).toString('base64url')}-${crypto.randomBytes(6).toString('base64url')}`;
 }
 
-module.exports = { DEFAULT_MAX_AGE_MS, SessionStore, authPath, loadAuth, randomPassword, saveAuth, verifyAuth };
+module.exports = { DEFAULT_MAX_AGE_MS, SessionStore, authPath, loadAuth, randomPassword, saveAuth, verifyAuth, verifyAuthAsync };
 
 if (require.main === module) {
   const { defaultStateDir } = require('./lib/paths');

@@ -5,13 +5,16 @@ const http = require('http');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { Transform, pipeline } = require('stream');
+const { WebSocketServer } = require('ws');
 const { WebRtcHost } = require('./webrtc-host');
 const { MicrofonoHost } = require('./microfono-host');
 const { browserKeyCommand } = require('./keyboard-translation');
 const platform = require('./platform');
 const { defaultStateDir } = require('./lib/paths');
-const { DEFAULT_MAX_AGE_MS, SessionStore, authPath, loadAuth, verifyAuth } = require('./auth-manager');
-const { DEFAULT_DEVICE_MAX_AGE_MS, DeviceStore, consumePairing } = require('./device-manager');
+const { atomicWriteJson, cookieValue, safeDecode } = require('./lib/safe');
+const { DEFAULT_MAX_AGE_MS, SessionStore, authPath, loadAuth, verifyAuthAsync } = require('./auth-manager');
+const { DEFAULT_DEVICE_MAX_AGE_MS, DeviceStore, consumePairingAsync } = require('./device-manager');
 
 const host = process.env.REMOTE_KEYBOARD_HOST || '0.0.0.0';
 const port = Number(process.env.REMOTE_KEYBOARD_PORT || 8765);
@@ -56,19 +59,20 @@ fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
 const viewers = new Set();
 const wsViewers = new Set();
 const audioViewers = new Set();
+const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
 // Los WebSocket del respaldo pueden quedar medio abiertos cuando un teléfono
 // cambia de red o el sistema congela el navegador. Sin latido seguían contando
 // como espectadores y mantenían grim/pw-record activos indefinidamente.
 const websocketHeartbeat = setInterval(() => {
   for (const socket of [...wsViewers, ...audioViewers]) {
-    if (socket.destroyed || socket.nexoAlive === false) {
-      socket.destroy();
+    if (socket.readyState !== 1 || socket.nexoAlive === false) {
+      socket.terminate();
       continue;
     }
     socket.nexoAlive = false;
-    try { socket.write(Buffer.from([0x89, 0x00])); } catch { socket.destroy(); }
+    try { socket.ping(); } catch { socket.terminate(); }
   }
-}, 30000);
+}, 15000);
 websocketHeartbeat.unref();
 let jpegStream = null;
 let audioCapture = null;
@@ -170,13 +174,11 @@ function readJson(req, maxBytes = 4096) {
   });
 }
 
-function cookieValue(req, name) {
-  const cookies = String(req.headers.cookie || '').split(';');
-  for (const item of cookies) {
-    const [key, ...parts] = item.trim().split('=');
-    if (key === name) return decodeURIComponent(parts.join('='));
-  }
-  return '';
+function sanitizeLogError(error) {
+  let msg = String(error?.message || error || 'Error interno');
+  if (token) msg = msg.split(token).join('***');
+  msg = msg.replace(/(nexo_(?:device|session)=)[^;\s]+/gi, '$1***');
+  return msg;
 }
 
 function requestSession(req) {
@@ -359,7 +361,7 @@ async function updateMonitor() {
       const next = { name: selected.name, x: selected.x, y: selected.y, width: selected.width, height: selected.height, index: selected.index ?? 0 };
       const changed = Object.keys(next).some(key => next[key] !== monitor[key]);
       monitor = next;
-      fs.writeFileSync(monitorStatePath, JSON.stringify({ name: monitor.name }) + '\n', { mode: 0o600 });
+      atomicWriteJson(monitorStatePath, { name: monitor.name }, 0o600);
       if (changed) {
         rtcHost?.monitorChanged();
         if (jpegStream) { jpegStream.stop(); jpegStream = null; streamFrames(); }
@@ -399,9 +401,10 @@ function streamFrames() {
         for (const res of viewers) {
           if (!res.destroyed && res.writableLength < 400 * 1024) { res.write(header); res.write(frame); res.write('\r\n'); }
         }
-        const packet = websocketFrame(frame);
         for (const socket of wsViewers) {
-          if (!socket.destroyed && socket.writableLength < 400 * 1024) socket.write(packet);
+          if (socket.readyState === 1 && socket.bufferedAmount < 400 * 1024) {
+            socket.send(frame, { binary: true });
+          }
         }
       }
     });
@@ -409,22 +412,6 @@ function streamFrames() {
     console.error(`Captura JPEG: ${error.message}`);
     jpegStream = null;
   }
-}
-
-function websocketFrame(payload) {
-  let header;
-  if (payload.length < 65536) {
-    header = Buffer.allocUnsafe(4);
-    header[0] = 0x82;
-    header[1] = 126;
-    header.writeUInt16BE(payload.length, 2);
-  } else {
-    header = Buffer.allocUnsafe(10);
-    header[0] = 0x82;
-    header[1] = 127;
-    header.writeBigUInt64BE(BigInt(payload.length), 2);
-  }
-  return Buffer.concat([header, payload]);
 }
 
 async function startAudioCapture() {
@@ -443,8 +430,11 @@ async function startAudioCapture() {
     return;
   }
   audioCapture.stdout.on('data', pcm => {
-    const packet = websocketFrame(pcm);
-    for (const socket of audioViewers) if (!socket.destroyed && socket.writableLength < 128 * 1024) socket.write(packet);
+    for (const socket of audioViewers) {
+      if (socket.readyState === 1 && socket.bufferedAmount < 128 * 1024) {
+        socket.send(pcm, { binary: true });
+      }
+    }
   });
   audioCapture.on('close', () => { audioCapture = null; if (audioViewers.size) setTimeout(startAudioCapture, 250); });
   audioCapture.on('error', () => { audioCapture = null; });
@@ -602,421 +592,464 @@ rtcHost = new WebRtcHost({
 const micHost = new MicrofonoHost({ onLog: message => console.error(message) });
 
 const server = http.createServer((req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-  if (url.pathname === '/health') return json(res, 200, { ok: true });
-  if (req.method === 'GET' && url.pathname === '/assets/viego-mist-keyboard.webp') {
-    res.writeHead(200, { 'content-type': 'image/webp', 'content-length': keyboardBackground.length, 'cache-control': 'public, max-age=86400' });
-    return res.end(keyboardBackground);
-  }
-  if (req.method === 'GET' && url.pathname === '/assets/viego-wallpaper.webp') {
-    res.writeHead(200, { 'content-type': 'image/webp', 'content-length': viegoWallpaper.length, 'cache-control': 'public, max-age=86400' });
-    return res.end(viegoWallpaper);
-  }
-  if (req.method === 'GET' && (url.pathname === '/keyboard-translation.js' || url.pathname === '/keyboard-translation-v3.js')) {
-    res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'content-length': keyboardTranslation.length, 'cache-control': 'no-cache' });
-    return res.end(keyboardTranslation);
-  }
-  if (req.method === 'GET' && url.pathname === '/microfono-cliente.js') {
-    res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'content-length': micClient.length, 'cache-control': 'no-cache' });
-    return res.end(micClient);
-  }
-  if (req.method === 'GET' && url.pathname === '/microfono/sostener.wav') {
-    res.writeHead(200, { 'content-type': 'audio/wav', 'content-length': micKeepAlive.length, 'cache-control': 'public, max-age=86400' });
-    return res.end(micKeepAlive);
-  }
-  if (req.method === 'GET' && url.pathname === '/manifest.webmanifest') {
-    return json(res, 200, { name: 'NEXO Control remoto', short_name: 'NEXO', start_url: '/', scope: '/', display: 'standalone', background_color: '#06100e', theme_color: '#07110f', icons: [{ src: '/assets/viego-wallpaper.webp', sizes: '512x512', type: 'image/webp', purpose: 'any maskable' }] });
-  }
-  if (req.method === 'GET' && url.pathname === '/sw.js') {
-    const worker = "const CACHE='nexo-static-v3';const ASSETS=['/assets/viego-wallpaper.webp','/assets/viego-mist-keyboard.webp'];self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)))});self.addEventListener('activate',e=>e.waitUntil(Promise.all([caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))),self.clients.claim()])));self.addEventListener('fetch',e=>{if(e.request.method==='GET'&&ASSETS.some(a=>new URL(e.request.url).pathname===a))e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)))})";
-    res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache', 'service-worker-allowed': '/' });
-    return res.end(worker);
-  }
-  // El enlace con token sigue funcionando, pero deja de ser la credencial: se
-  // canjea una vez por una cookie de dispositivo y desaparece de la barra de
-  // direcciones. Quien no traiga ninguna de las dos sólo recibe la página, que
-  // pedirá un código de emparejamiento.
-  let device = devices.get(cookieValue(req, deviceCookieName));
-  if (!device && (tokenMatches(url.searchParams.get('token')) || tokenMatches(req.headers['x-remote-token']))) {
-    const created = devices.create(describeClient(req));
-    device = created.device;
-    addCookie(res, deviceCookie(req, created.secret, Math.floor(devices.maxAgeMs / 1000)));
-    recordDiagnostic('device:link', 'ok');
-    auditAccess('device-pair', 'ok', `enlace · ${created.device.label}`);
-    if (req.method === 'GET' && url.pathname === '/' && url.searchParams.has('token')) {
-      res.writeHead(302, { location: '/', 'cache-control': 'no-store' });
-      return res.end();
-    }
-  }
-  if (req.method === 'POST' && url.pathname === '/pair') {
-    const attemptKey = loginKey(req);
-    const remaining = loginBlocked(attemptKey);
-    if (remaining) return json(res, 429, { error: 'Demasiados intentos; espera antes de reintentar', retryAfterMs: remaining });
-    return readJson(req, 1024).then(body => {
-      if (!consumePairing(pairingPath, body.code)) {
-        registerLoginFailure(attemptKey);
-        recordDiagnostic('pair', 'denied');
-        auditAccess('pair', 'denied');
-        return json(res, 401, { error: 'Código inválido, ya usado o caducado' });
-      }
-      loginAttempts.delete(attemptKey);
-      const created = devices.create(describeClient(req));
-      addCookie(res, deviceCookie(req, created.secret, Math.floor(devices.maxAgeMs / 1000)));
-      recordDiagnostic('pair', 'ok');
-      auditAccess('pair', 'ok', created.device.label);
-      return json(res, 200, { ok: true });
-    }).catch(error => json(res, 400, { error: error.message }));
-  }
-  if (req.method === 'GET' && url.pathname === '/') {
-    res.writeHead(200, {
-      'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store',
-      'content-security-policy': "default-src 'self'; img-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'"
-    });
-    return res.end(page);
-  }
-  // La interfaz de micrófono se entrega igual que la principal, antes de exigir
-  // dispositivo emparejado: sin la página no habría dónde escribir el código de
-  // emparejamiento. Las rutas que mueven audio sí quedan detrás del candado.
-  if (req.method === 'GET' && url.pathname === '/microfono') {
-    res.writeHead(200, {
-      'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store',
-      'content-security-policy': "default-src 'self'; img-src 'self' blob:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'"
-    });
-    return res.end(micPage);
-  }
-  if (!device) return json(res, 403, { error: 'Empareja este dispositivo para continuar', pairing: true });
-  if (req.method === 'GET' && url.pathname === '/auth/status') {
-    const session = requestSession(req);
-    return json(res, 200, { required: authRequired, configured: !authRequired || Boolean(authConfig), authenticated: Boolean(session), username: authConfig?.username || (authRequired ? '' : 'nexo') });
-  }
-  if (req.method === 'POST' && url.pathname === '/auth/login') {
-    if (!authRequired) return json(res, 200, { ok: true, required: false });
-    if (!authConfig) return json(res, 503, { error: 'Credenciales del equipo original no configuradas' });
-    const attemptKey = loginKey(req);
-    const remaining = loginBlocked(attemptKey);
-    if (remaining) return json(res, 429, { error: 'Demasiados intentos; espera antes de reintentar', retryAfterMs: remaining });
-    return readJson(req).then(credentials => {
-      if (!verifyAuth(authConfig, credentials.username, credentials.password)) {
-        registerLoginFailure(attemptKey);
-        recordDiagnostic('auth:login', 'denied');
-        auditAccess('login', 'denied');
-        return json(res, 401, { error: 'Usuario o contraseña incorrectos' });
-      }
-      loginAttempts.delete(attemptKey);
-      const session = authSessions.create(credentials.label || 'Navegador');
-      addCookie(res, sessionCookie(req, session.token, Math.floor(authSessions.maxAgeMs / 1000)));
-      recordDiagnostic('auth:login', 'ok');
-      auditAccess('login', 'ok', session.label);
-      return json(res, 200, { ok: true, username: authConfig.username });
-    }).catch(error => json(res, 400, { error: error.message }));
-  }
-  if (req.method === 'POST' && url.pathname === '/auth/logout') {
-    const value = cookieValue(req, authCookieName), session = authSessions.get(value);
-    if (session) authSessions.revoke(session.id);
-    addCookie(res, sessionCookie(req, '', 0));
-    auditAccess('logout', 'ok', session?.label);
-    return json(res, 200, { ok: true });
-  }
-  if (req.method === 'GET' && url.pathname === '/session-options') {
-    sessionOptions().then(options => json(res, 200, options));
-    return;
-  }
-  const currentSession = requestSession(req);
-  if (authRequired && !currentSession) return json(res, 401, { error: 'Inicia sesión para controlar Mi PC original' });
-  if (req.method === 'GET' && url.pathname === '/auth/sessions') {
-    return json(res, 200, { currentId: currentSession.id, sessions: authSessions.list() });
-  }
-  if (req.method === 'GET' && url.pathname === '/devices') {
-    return json(res, 200, { currentId: device.id, maxAgeMs: devices.maxAgeMs, devices: devices.list() });
-  }
-  if (req.method === 'POST' && url.pathname === '/devices/revoke-others') {
-    devices.revokeAllExcept(device.id);
-    recordDiagnostic('device:revoke', 'ok');
-    auditAccess('device-revoke-others', 'ok', device.label);
-    return json(res, 200, { ok: true });
-  }
-  if (req.method === 'DELETE' && url.pathname.startsWith('/devices/')) {
-    const id = decodeURIComponent(url.pathname.slice('/devices/'.length));
-    // Revocarse a uno mismo cierra la sesión actual; se limpia la cookie para
-    // que el navegador no siga presentando un secreto que ya no vale.
-    const removed = devices.revoke(id);
-    if (removed && id === device.id) addCookie(res, deviceCookie(req, '', 0));
-    auditAccess('device-revoke', removed ? 'ok' : 'denied');
-    return json(res, removed ? 200 : 404, removed ? { ok: true } : { error: 'Dispositivo no encontrado' });
-  }
-  if (req.method === 'POST' && url.pathname === '/auth/revoke-others') {
-    authSessions.revokeAllExcept(currentSession.id);
-    recordDiagnostic('auth:revoke', 'ok');
-    auditAccess('revoke-others', 'ok', currentSession.label);
-    return json(res, 200, { ok: true });
-  }
-  if (req.method === 'GET' && url.pathname === '/clipboard') {
-    return platform.clipboardGet()
-      .then(text => json(res, 200, { text }))
-      .catch(error => json(res, 503, { error: `Portapapeles no disponible: ${error.message}` }));
-  }
-  if (req.method === 'POST' && url.pathname === '/clipboard') {
-    return readJson(req, 1024 * 1024 + 1024).then(value => {
-      if (typeof value.text !== 'string' || Buffer.byteLength(value.text) > 1024 * 1024) throw new Error('Texto de portapapeles inválido');
-      return platform.clipboardSet(value.text);
-    }).then(() => { recordDiagnostic('clipboard', 'ok'); json(res, 200, { ok: true }); })
-      .catch(error => json(res, 400, { error: error.message }));
-  }
-  if (req.method === 'GET' && url.pathname === '/files') return json(res, 200, { files: listFiles(), maxUploadBytes });
-  if (req.method === 'POST' && url.pathname === '/files') {
-    let headerName = String(req.headers['x-nexo-filename'] || 'archivo');
-    try { headerName = decodeURIComponent(headerName); } catch {}
-    const requestedName = safeFileName(headerName);
-    const finalName = fs.existsSync(path.join(filesDir, requestedName)) ? `${Date.now()}-${requestedName}` : requestedName;
-    const target = path.join(filesDir, finalName), temporary = `${target}.upload-${process.pid}`;
-    const output = fs.createWriteStream(temporary, { mode: 0o600, flags: 'wx' });
-    let size = 0, tooLarge = false;
-    req.on('data', chunk => {
-      size += chunk.length;
-      if (size > maxUploadBytes && !tooLarge) { tooLarge = true; output.destroy(); }
-      else if (!tooLarge) output.write(chunk);
-    });
-    req.on('end', () => {
-      if (tooLarge) { fs.rmSync(temporary, { force: true }); return json(res, 413, { error: 'El archivo supera el límite permitido' }); }
-      output.end(() => {
-        try { fs.renameSync(temporary, target); auditAccess('file-upload', 'ok', finalName); json(res, 201, { ok: true, name: finalName, size }); }
-        catch (error) { fs.rmSync(temporary, { force: true }); json(res, 500, { error: error.message }); }
-      });
-    });
-    req.on('error', () => { output.destroy(); fs.rmSync(temporary, { force: true }); });
-    return;
-  }
-  if (req.method === 'GET' && url.pathname.startsWith('/files/')) {
-    const name = safeFileName(decodeURIComponent(url.pathname.slice('/files/'.length))), target = path.join(filesDir, name);
+  try {
+    let url;
     try {
-      const stat = fs.statSync(target);
-      if (!stat.isFile()) throw new Error();
-      res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': stat.size, 'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}`, 'cache-control': 'no-store' });
-      return fs.createReadStream(target).pipe(res);
-    } catch { return json(res, 404, { error: 'Archivo no encontrado' }); }
-  }
-  if (req.method === 'DELETE' && url.pathname.startsWith('/files/')) {
-    const name = safeFileName(decodeURIComponent(url.pathname.slice('/files/'.length)));
-    try { fs.unlinkSync(path.join(filesDir, name)); auditAccess('file-delete', 'ok', name); return json(res, 200, { ok: true }); }
-    catch { return json(res, 404, { error: 'Archivo no encontrado' }); }
-  }
-  if (req.method === 'GET' && url.pathname === '/downloads/nexo-super-bridge.exe') {
-    try {
-      const stat = fs.statSync(windowsSuperBridge);
-      res.writeHead(200, {
-        'content-type': 'application/vnd.microsoft.portable-executable',
-        'content-length': stat.size,
-        'content-disposition': 'attachment; filename="nexo-super-bridge.exe"',
-        'cache-control': 'no-store',
-        'x-content-type-options': 'nosniff'
-      });
-      return fs.createReadStream(windowsSuperBridge).pipe(res);
+      url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     } catch {
-      return json(res, 404, { error: 'Puente para Windows no instalado' });
+      return json(res, 400, { error: 'URL inválida' });
     }
-  }
-  if (req.method === 'GET' && url.pathname === '/info') {
-    return json(res, 200, { width: monitor.width, height: monitor.height, name: monitor.name, monitors: monitors.map(item => ({ ...item, selected: item.name === monitor.name })), gpuProfile: readGpuProfile(), webrtc: true, rtc: rtcHost.stats() });
-  }
-  if (req.method === 'GET' && url.pathname === '/diagnostics') {
-    return json(res, 200, {
-      server: { uptimeMs: Date.now() - startedAt, sessionKind, gpuEnabled },
-      monitor: { ...monitor },
-      rtc: rtcHost.stats(),
-      streams: { jpeg: viewers.size + wsViewers.size, audio: audioViewers.size },
-      client: clientDiagnostic,
-      lastEvent: diagnosticEvents.at(-1) || null,
-      recentEvents: diagnosticEvents.slice(-20)
-    });
-  }
-  if (req.method === 'GET' && url.pathname === '/diagnostics/export') {
-    const report = {
-      generatedAt: new Date().toISOString(),
-      server: { uptimeMs: Date.now() - startedAt, sessionKind, gpuEnabled, node: process.version },
-      monitor: { ...monitor }, rtc: rtcHost.stats(),
-      streams: { jpeg: viewers.size + wsViewers.size, audio: audioViewers.size },
-      recentEvents: diagnosticEvents.slice(-100), files: { count: listFiles().length },
-      auth: { required: authRequired, configured: Boolean(authConfig), sessions: authSessions.list().length }
-    };
-    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'content-disposition': 'attachment; filename="nexo-diagnostico.json"', 'cache-control': 'no-store' });
-    return res.end(JSON.stringify(report, null, 2) + '\n');
-  }
-  if (req.method === 'POST' && url.pathname === '/diagnostics/client') {
-    let body = '';
-    req.setEncoding('utf8');
-    req.on('data', chunk => { if ((body += chunk).length > 4096) req.destroy(); });
-    req.on('end', () => {
-      try { clientDiagnostic = sanitizeClientDiagnostic(JSON.parse(body)); json(res, 200, { ok: true }); }
-      catch { json(res, 400, { error: 'Diagnóstico inválido' }); }
-    });
-    return;
-  }
-  if (req.method === 'POST' && url.pathname === '/gpu-profile') {
-    let body = '';
-    req.setEncoding('utf8');
-    req.on('data', chunk => { if ((body += chunk).length > 2048) req.destroy(); });
-    req.on('end', () => {
-      try {
-        const profile = JSON.parse(body);
-        const fps = Number(profile.fps), height = Number(profile.height);
-        if (![30, 45, 60].includes(fps) || ![720, 900, 1080].includes(height)) throw new Error('Perfil GPU inválido');
-        const current = readGpuProfile();
-        if (current.fps !== fps || current.height !== height) fs.writeFileSync(gpuProfilePath, JSON.stringify({ fps, height }) + '\n', { mode: 0o600 });
-        json(res, 200, { ok: true, fps, height });
-      } catch (error) { json(res, 400, { error: error.message }); }
-    });
-    return;
-  }
-  if (url.pathname.startsWith('/gpu-webrtc/')) {
-    // Cada sesión usa su propio puente. Esto evita que NEXO independiente
-    // muestre por error el monitor de la sesión física.
-    if (!gpuEnabled) return json(res, 503, { error: 'GPU WebRTC desactivado para esta sesión' });
-    const targetPath = url.pathname.replace(/^\/gpu-webrtc/, '');
-    const headers = { ...req.headers, host: `127.0.0.1:${gpuBridgePort}` };
-    const proxy = http.request({ host: '127.0.0.1', port: gpuBridgePort, method: req.method, path: targetPath, headers }, upstream => {
-      res.writeHead(upstream.statusCode || 502, upstream.headers);
-      upstream.pipe(res);
-    });
-    proxy.on('error', error => json(res, 502, { error: `GPU WebRTC: ${error.message}` }));
-    req.pipe(proxy);
-    return;
-  }
-  if (req.method === 'POST' && url.pathname === '/monitor') {
-    let body = '';
-    req.setEncoding('utf8');
-    req.on('data', chunk => { if ((body += chunk).length > 2048) req.destroy(); });
-    req.on('end', async () => {
-      try { json(res, 200, { ok: true, monitor: await selectMonitor(JSON.parse(body).name) }); }
-      catch (error) { json(res, 400, { error: error.message }); }
-    });
-    return;
-  }
-  if (req.method === 'POST' && url.pathname === '/webrtc/offer') {
-    let body = '';
-    req.setEncoding('utf8');
-    req.on('data', chunk => { if ((body += chunk).length > 1024 * 1024) req.destroy(); });
-    req.on('end', async () => {
-      try {
-        const offer = JSON.parse(body);
-        if (offer.type !== 'offer' || typeof offer.sdp !== 'string') throw new Error('Oferta inválida');
-        json(res, 200, await rtcHost.acceptOffer(offer, offer.nexoVideo));
-      } catch (error) { json(res, 500, { error: error.message || 'No se pudo iniciar WebRTC' }); }
-    });
-    return;
-  }
-  if (req.method === 'POST' && url.pathname === '/microfono/oferta') {
-    let body = '';
-    req.setEncoding('utf8');
-    req.on('data', chunk => { if ((body += chunk).length > 1024 * 1024) req.destroy(); });
-    req.on('end', async () => {
-      try {
-        const oferta = JSON.parse(body);
-        if (oferta.type !== 'offer' || typeof oferta.sdp !== 'string') throw new Error('Oferta inválida');
-        const respuesta = await micHost.aceptarOferta(oferta, { etiqueta: oferta.etiqueta });
-        recordDiagnostic('microfono:oferta', 'ok', 'webrtc');
-        auditAccess('microfono-on', 'ok', device.label);
-        json(res, 200, respuesta);
-      } catch (error) {
-        recordDiagnostic('microfono:oferta', 'error', 'webrtc');
-        json(res, 500, { error: error.message || 'No se pudo abrir el micrófono' });
+    if (url.pathname === '/health') return json(res, 200, { ok: true });
+    if (req.method === 'GET' && url.pathname === '/assets/viego-mist-keyboard.webp') {
+      res.writeHead(200, { 'content-type': 'image/webp', 'content-length': keyboardBackground.length, 'cache-control': 'public, max-age=86400' });
+      return res.end(keyboardBackground);
+    }
+    if (req.method === 'GET' && url.pathname === '/assets/viego-wallpaper.webp') {
+      res.writeHead(200, { 'content-type': 'image/webp', 'content-length': viegoWallpaper.length, 'cache-control': 'public, max-age=86400' });
+      return res.end(viegoWallpaper);
+    }
+    if (req.method === 'GET' && (url.pathname === '/keyboard-translation.js' || url.pathname === '/keyboard-translation-v3.js')) {
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'content-length': keyboardTranslation.length, 'cache-control': 'no-cache' });
+      return res.end(keyboardTranslation);
+    }
+    if (req.method === 'GET' && url.pathname === '/microfono-cliente.js') {
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'content-length': micClient.length, 'cache-control': 'no-cache' });
+      return res.end(micClient);
+    }
+    if (req.method === 'GET' && url.pathname === '/microfono/sostener.wav') {
+      res.writeHead(200, { 'content-type': 'audio/wav', 'content-length': micKeepAlive.length, 'cache-control': 'public, max-age=86400' });
+      return res.end(micKeepAlive);
+    }
+    if (req.method === 'GET' && url.pathname === '/manifest.webmanifest') {
+      return json(res, 200, { name: 'NEXO Control remoto', short_name: 'NEXO', start_url: '/', scope: '/', display: 'standalone', background_color: '#06100e', theme_color: '#07110f', icons: [{ src: '/assets/viego-wallpaper.webp', sizes: '512x512', type: 'image/webp', purpose: 'any maskable' }] });
+    }
+    if (req.method === 'GET' && url.pathname === '/sw.js') {
+      const worker = "const CACHE='nexo-static-v3';const ASSETS=['/assets/viego-wallpaper.webp','/assets/viego-mist-keyboard.webp'];self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)))});self.addEventListener('activate',e=>e.waitUntil(Promise.all([caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))),self.clients.claim()])));self.addEventListener('fetch',e=>{if(e.request.method==='GET'&&ASSETS.some(a=>new URL(e.request.url).pathname===a))e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)))})";
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache', 'service-worker-allowed': '/' });
+      return res.end(worker);
+    }
+    // El enlace con token sigue funcionando, pero deja de ser la credencial: se
+    // canjea una vez por una cookie de dispositivo y desaparece de la barra de
+    // direcciones. Quien no traiga ninguna de las dos sólo recibe la página, que
+    // pedirá un código de emparejamiento.
+    const deviceSecret = cookieValue(req, deviceCookieName);
+    let device = devices.get(deviceSecret);
+    if (device?.renewed) {
+      addCookie(res, deviceCookie(req, deviceSecret, Math.floor(devices.maxAgeMs / 1000)));
+    }
+    if (!device && (tokenMatches(url.searchParams.get('token')) || tokenMatches(req.headers['x-remote-token']))) {
+      const created = devices.create(describeClient(req));
+      device = created.device;
+      addCookie(res, deviceCookie(req, created.secret, Math.floor(devices.maxAgeMs / 1000)));
+      recordDiagnostic('device:link', 'ok');
+      auditAccess('device-pair', 'ok', `enlace · ${created.device.label}`);
+      if (req.method === 'GET' && url.pathname === '/' && url.searchParams.has('token')) {
+        res.writeHead(302, { location: '/', 'cache-control': 'no-store' });
+        return res.end();
       }
-    });
-    return;
-  }
-  if (req.method === 'POST' && url.pathname === '/microfono/silencio') {
-    let body = '';
-    req.setEncoding('utf8');
-    req.on('data', chunk => { if ((body += chunk).length > 1024) req.destroy(); });
-    req.on('end', () => {
-      try { json(res, 200, { ok: true, silenciado: micHost.silenciar(JSON.parse(body).silenciado) }); }
-      catch (error) { json(res, 400, { error: error.message }); }
-    });
-    return;
-  }
-  if (req.method === 'POST' && url.pathname === '/microfono/apagar') {
-    micHost.cerrarPar('apagado desde el cliente');
-    auditAccess('microfono-off', 'ok', device.label);
-    return json(res, 200, { ok: true });
-  }
-  if (req.method === 'GET' && url.pathname === '/microfono/estado') return json(res, 200, micHost.estado());
-  if (req.method === 'GET' && url.pathname === '/screen') {
-    return platform.screenshotJpeg({ monitor, quality: 65 })
-      .then(image => {
+    }
+    if (req.method === 'POST' && url.pathname === '/pair') {
+      const attemptKey = loginKey(req);
+      const remaining = loginBlocked(attemptKey);
+      if (remaining) return json(res, 429, { error: 'Demasiados intentos; espera antes de reintentar', retryAfterMs: remaining });
+      return readJson(req, 1024).then(async body => {
+        if (!(await consumePairingAsync(pairingPath, body.code))) {
+          registerLoginFailure(attemptKey);
+          recordDiagnostic('pair', 'denied');
+          auditAccess('pair', 'denied');
+          return json(res, 401, { error: 'Código inválido, ya usado o caducado' });
+        }
+        loginAttempts.delete(attemptKey);
+        const created = devices.create(describeClient(req));
+        addCookie(res, deviceCookie(req, created.secret, Math.floor(devices.maxAgeMs / 1000)));
+        recordDiagnostic('pair', 'ok');
+        auditAccess('pair', 'ok', created.device.label);
+        return json(res, 200, { ok: true });
+      }).catch(error => json(res, 400, { error: error.message }));
+    }
+    if (req.method === 'GET' && url.pathname === '/') {
+      res.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store',
+        'content-security-policy': "default-src 'self'; img-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'"
+      });
+      return res.end(page);
+    }
+    // La interfaz de micrófono se entrega igual que la principal, antes de exigir
+    // dispositivo emparejado: sin la página no habría dónde escribir el código de
+    // emparejamiento. Las rutas que mueven audio sí quedan detrás del candado.
+    if (req.method === 'GET' && url.pathname === '/microfono') {
+      res.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store',
+        'content-security-policy': "default-src 'self'; img-src 'self' blob:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'"
+      });
+      return res.end(micPage);
+    }
+    if (!device) return json(res, 403, { error: 'Empareja este dispositivo para continuar', pairing: true });
+    if (req.method === 'GET' && url.pathname === '/auth/status') {
+      const session = requestSession(req);
+      return json(res, 200, { required: authRequired, configured: !authRequired || Boolean(authConfig), authenticated: Boolean(session), username: authConfig?.username || (authRequired ? '' : 'nexo') });
+    }
+    if (req.method === 'POST' && url.pathname === '/auth/login') {
+      if (!authRequired) return json(res, 200, { ok: true, required: false });
+      if (!authConfig) return json(res, 503, { error: 'Credenciales del equipo original no configuradas' });
+      const attemptKey = loginKey(req);
+      const remaining = loginBlocked(attemptKey);
+      if (remaining) return json(res, 429, { error: 'Demasiados intentos; espera antes de reintentar', retryAfterMs: remaining });
+      return readJson(req).then(async credentials => {
+        if (!(await verifyAuthAsync(authConfig, credentials.username, credentials.password))) {
+          registerLoginFailure(attemptKey);
+          recordDiagnostic('auth:login', 'denied');
+          auditAccess('login', 'denied');
+          return json(res, 401, { error: 'Usuario o contraseña incorrectos' });
+        }
+        loginAttempts.delete(attemptKey);
+        const session = authSessions.create(credentials.label || 'Navegador');
+        addCookie(res, sessionCookie(req, session.token, Math.floor(authSessions.maxAgeMs / 1000)));
+        recordDiagnostic('auth:login', 'ok');
+        auditAccess('login', 'ok', session.label);
+        return json(res, 200, { ok: true, username: authConfig.username });
+      }).catch(error => json(res, 400, { error: error.message }));
+    }
+    if (req.method === 'POST' && url.pathname === '/auth/logout') {
+      const value = cookieValue(req, authCookieName), session = authSessions.get(value);
+      if (session) authSessions.revoke(session.id);
+      addCookie(res, sessionCookie(req, '', 0));
+      auditAccess('logout', 'ok', session?.label);
+      return json(res, 200, { ok: true });
+    }
+    if (req.method === 'GET' && url.pathname === '/session-options') {
+      sessionOptions().then(options => json(res, 200, options));
+      return;
+    }
+    const currentSession = requestSession(req);
+    if (authRequired && !currentSession) return json(res, 401, { error: 'Inicia sesión para controlar Mi PC original' });
+    if (req.method === 'GET' && url.pathname === '/auth/sessions') {
+      return json(res, 200, { currentId: currentSession.id, sessions: authSessions.list() });
+    }
+    if (req.method === 'GET' && url.pathname === '/devices') {
+      return json(res, 200, { currentId: device.id, maxAgeMs: devices.maxAgeMs, devices: devices.list() });
+    }
+    if (req.method === 'POST' && url.pathname === '/devices/revoke-others') {
+      devices.revokeAllExcept(device.id);
+      recordDiagnostic('device:revoke', 'ok');
+      auditAccess('device-revoke-others', 'ok', device.label);
+      return json(res, 200, { ok: true });
+    }
+    if (req.method === 'DELETE' && url.pathname.startsWith('/devices/')) {
+      const id = safeDecode(url.pathname.slice('/devices/'.length));
+      if (id === null) return json(res, 400, { error: 'Ruta inválida' });
+      // Revocarse a uno mismo cierra la sesión actual; se limpia la cookie para
+      // que el navegador no siga presentando un secreto que ya no vale.
+      const removed = devices.revoke(id);
+      if (removed && id === device.id) addCookie(res, deviceCookie(req, '', 0));
+      auditAccess('device-revoke', removed ? 'ok' : 'denied');
+      return json(res, removed ? 200 : 404, removed ? { ok: true } : { error: 'Dispositivo no encontrado' });
+    }
+    if (req.method === 'POST' && url.pathname === '/auth/revoke-others') {
+      authSessions.revokeAllExcept(currentSession.id);
+      recordDiagnostic('auth:revoke', 'ok');
+      auditAccess('revoke-others', 'ok', currentSession.label);
+      return json(res, 200, { ok: true });
+    }
+    if (req.method === 'GET' && url.pathname === '/clipboard') {
+      return platform.clipboardGet()
+        .then(text => json(res, 200, { text }))
+        .catch(error => json(res, 503, { error: `Portapapeles no disponible: ${error.message}` }));
+    }
+    if (req.method === 'POST' && url.pathname === '/clipboard') {
+      return readJson(req, 1024 * 1024 + 1024).then(value => {
+        if (typeof value.text !== 'string' || Buffer.byteLength(value.text) > 1024 * 1024) throw new Error('Texto de portapapeles inválido');
+        return platform.clipboardSet(value.text);
+      }).then(() => { recordDiagnostic('clipboard', 'ok'); json(res, 200, { ok: true }); })
+        .catch(error => json(res, 400, { error: error.message }));
+    }
+    if (req.method === 'GET' && url.pathname === '/files') return json(res, 200, { files: listFiles(), maxUploadBytes });
+    if (req.method === 'POST' && url.pathname === '/files') {
+      let headerName = String(req.headers['x-nexo-filename'] || 'archivo');
+      const decodedHeader = safeDecode(headerName);
+      if (decodedHeader !== null) headerName = decodedHeader;
+      const requestedName = safeFileName(headerName);
+      const finalName = fs.existsSync(path.join(filesDir, requestedName)) ? `${Date.now()}-${requestedName}` : requestedName;
+      const target = path.join(filesDir, finalName), temporary = `${target}.upload-${process.pid}`;
+      let size = 0;
+      const limitStream = new Transform({
+        transform(chunk, _encoding, callback) {
+          size += chunk.length;
+          if (size > maxUploadBytes) {
+            const err = new Error('El archivo supera el límite permitido');
+            err.tooLarge = true;
+            return callback(err);
+          }
+          callback(null, chunk);
+        }
+      });
+      const output = fs.createWriteStream(temporary, { mode: 0o600, flags: 'wx' });
+      pipeline(req, limitStream, output, error => {
+        if (error) {
+          try { fs.rmSync(temporary, { force: true }); } catch {}
+          if (!res.headersSent) {
+            if (error.tooLarge) json(res, 413, { error: 'El archivo supera el límite permitido' });
+            else json(res, 500, { error: 'No se pudo guardar el archivo' });
+          }
+          return;
+        }
+        try {
+          fs.renameSync(temporary, target);
+          auditAccess('file-upload', 'ok', finalName);
+          json(res, 201, { ok: true, name: finalName, size });
+        } catch (renameError) {
+          try { fs.rmSync(temporary, { force: true }); } catch {}
+          if (!res.headersSent) json(res, 500, { error: renameError.message });
+        }
+      });
+      return;
+    }
+    if (req.method === 'GET' && url.pathname.startsWith('/files/')) {
+      const rawName = safeDecode(url.pathname.slice('/files/'.length));
+      if (rawName === null) return json(res, 400, { error: 'Ruta inválida' });
+      const name = safeFileName(rawName), target = path.join(filesDir, name);
+      try {
+        const stat = fs.statSync(target);
+        if (!stat.isFile()) throw new Error();
+        res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': stat.size, 'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}`, 'cache-control': 'no-store' });
+        return fs.createReadStream(target).pipe(res);
+      } catch { return json(res, 404, { error: 'Archivo no encontrado' }); }
+    }
+    if (req.method === 'DELETE' && url.pathname.startsWith('/files/')) {
+      const rawName = safeDecode(url.pathname.slice('/files/'.length));
+      if (rawName === null) return json(res, 400, { error: 'Ruta inválida' });
+      const name = safeFileName(rawName);
+      try { fs.unlinkSync(path.join(filesDir, name)); auditAccess('file-delete', 'ok', name); return json(res, 200, { ok: true }); }
+      catch { return json(res, 404, { error: 'Archivo no encontrado' }); }
+    }
+    if (req.method === 'GET' && url.pathname === '/downloads/nexo-super-bridge.exe') {
+      try {
+        const stat = fs.statSync(windowsSuperBridge);
         res.writeHead(200, {
-          'content-type': 'image/jpeg', 'content-length': image.length,
-          'cache-control': 'no-store, no-cache, must-revalidate'
+          'content-type': 'application/vnd.microsoft.portable-executable',
+          'content-length': stat.size,
+          'content-disposition': 'attachment; filename="nexo-super-bridge.exe"',
+          'cache-control': 'no-store',
+          'x-content-type-options': 'nosniff'
         });
-        res.end(image);
-      })
-      .catch(error => json(res, 500, { error: error.message }));
-  }
-  if (req.method === 'GET' && url.pathname === '/stream') {
-    res.writeHead(200, {
-      'content-type': 'multipart/x-mixed-replace; boundary=frame',
-      'cache-control': 'no-store, no-cache, must-revalidate',
-      'connection': 'keep-alive'
-    });
-    viewers.add(res);
-    req.on('close', () => { viewers.delete(res); stopJpegIfUnused(); });
-    streamFrames();
-    return;
-  }
-  if (req.method === 'POST' && url.pathname === '/pointer') {
-    let body = '';
-    req.setEncoding('utf8');
-    req.on('data', chunk => { if ((body += chunk).length > 2048) req.destroy(); });
-    req.on('end', async () => {
-      try { enqueuePointer(JSON.parse(body)); recordDiagnostic('pointer', 'received'); json(res, 200, { ok: true }); }
-      catch (error) { json(res, 400, { error: error.message }); }
-    });
-    return;
-  }
-  if (req.method === 'POST' && url.pathname === '/scroll') {
-    let body = '';
-    req.setEncoding('utf8');
-    req.on('data', chunk => { if ((body += chunk).length > 2048) req.destroy(); });
-    req.on('end', () => {
-      try { enqueueScroll(JSON.parse(body)); recordDiagnostic('scroll', 'received'); json(res, 200, { ok: true }); }
-      catch (error) { json(res, 400, { error: error.message }); }
-    });
-    return;
-  }
-  if (req.method === 'POST' && url.pathname === '/workspace') {
-    let body = '';
-    req.setEncoding('utf8');
-    req.on('data', chunk => { if ((body += chunk).length > 1024) req.destroy(); });
-    req.on('end', async () => {
-      try {
-        const { workspace } = JSON.parse(body);
-        await platform.workspace(workspace);
-        recordDiagnostic('workspace');
-        json(res, 200, { ok: true });
-      } catch (error) {
-        json(res, 500, { error: error.message || 'Error interno' });
+        return fs.createReadStream(windowsSuperBridge).pipe(res);
+      } catch {
+        return json(res, 404, { error: 'Puente para Windows no instalado' });
       }
-    });
-    return;
+    }
+    if (req.method === 'GET' && url.pathname === '/info') {
+      return json(res, 200, { width: monitor.width, height: monitor.height, name: monitor.name, monitors: monitors.map(item => ({ ...item, selected: item.name === monitor.name })), gpuProfile: readGpuProfile(), webrtc: true, rtc: rtcHost.stats() });
+    }
+    if (req.method === 'GET' && url.pathname === '/diagnostics') {
+      return json(res, 200, {
+        server: { uptimeMs: Date.now() - startedAt, sessionKind, gpuEnabled },
+        monitor: { ...monitor },
+        rtc: rtcHost.stats(),
+        streams: { jpeg: viewers.size + wsViewers.size, audio: audioViewers.size },
+        client: clientDiagnostic,
+        lastEvent: diagnosticEvents.at(-1) || null,
+        recentEvents: diagnosticEvents.slice(-20)
+      });
+    }
+    if (req.method === 'GET' && url.pathname === '/diagnostics/export') {
+      const report = {
+        generatedAt: new Date().toISOString(),
+        server: { uptimeMs: Date.now() - startedAt, sessionKind, gpuEnabled, node: process.version },
+        monitor: { ...monitor }, rtc: rtcHost.stats(),
+        streams: { jpeg: viewers.size + wsViewers.size, audio: audioViewers.size },
+        recentEvents: diagnosticEvents.slice(-100), files: { count: listFiles().length },
+        auth: { required: authRequired, configured: Boolean(authConfig), sessions: authSessions.list().length }
+      };
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'content-disposition': 'attachment; filename="nexo-diagnostico.json"', 'cache-control': 'no-store' });
+      return res.end(JSON.stringify(report, null, 2) + '\n');
+    }
+    if (req.method === 'POST' && url.pathname === '/diagnostics/client') {
+      let body = '';
+      req.setEncoding('utf8');
+      req.on('data', chunk => { if ((body += chunk).length > 4096) req.destroy(); });
+      req.on('end', () => {
+        try { clientDiagnostic = sanitizeClientDiagnostic(JSON.parse(body)); json(res, 200, { ok: true }); }
+        catch { json(res, 400, { error: 'Diagnóstico inválido' }); }
+      });
+      return;
+    }
+    if (req.method === 'POST' && url.pathname === '/gpu-profile') {
+      let body = '';
+      req.setEncoding('utf8');
+      req.on('data', chunk => { if ((body += chunk).length > 2048) req.destroy(); });
+      req.on('end', () => {
+        try {
+          const profile = JSON.parse(body);
+          const fps = Number(profile.fps), height = Number(profile.height);
+          if (![30, 45, 60].includes(fps) || ![720, 900, 1080].includes(height)) throw new Error('Perfil GPU inválido');
+          const current = readGpuProfile();
+          if (current.fps !== fps || current.height !== height) atomicWriteJson(gpuProfilePath, { fps, height }, 0o600);
+          json(res, 200, { ok: true, fps, height });
+        } catch (error) { json(res, 400, { error: error.message }); }
+      });
+      return;
+    }
+    if (url.pathname.startsWith('/gpu-webrtc/')) {
+      const allowedGpuRoute =
+        (req.method === 'POST' && url.pathname === '/gpu-webrtc/offer') ||
+        (req.method === 'GET' && (url.pathname === '/gpu-webrtc/health' || url.pathname === '/gpu-webrtc/stats'));
+      if (!allowedGpuRoute) return json(res, 404, { error: 'No encontrado' });
+      // Cada sesión usa su propio puente. Esto evita que NEXO independiente
+      // muestre por error el monitor de la sesión física.
+      if (!gpuEnabled) return json(res, 503, { error: 'GPU WebRTC desactivado para esta sesión' });
+      const targetPath = url.pathname.replace(/^\/gpu-webrtc/, '');
+      const headers = { host: `127.0.0.1:${gpuBridgePort}` };
+      if (req.headers['content-type']) headers['content-type'] = req.headers['content-type'];
+      if (req.headers['content-length']) headers['content-length'] = req.headers['content-length'];
+      const proxy = http.request({ host: '127.0.0.1', port: gpuBridgePort, method: req.method, path: targetPath, headers }, upstream => {
+        res.writeHead(upstream.statusCode || 502, upstream.headers);
+        upstream.pipe(res);
+      });
+      proxy.on('error', error => json(res, 502, { error: `GPU WebRTC: ${error.message}` }));
+      req.pipe(proxy);
+      return;
+    }
+    if (req.method === 'POST' && url.pathname === '/monitor') {
+      let body = '';
+      req.setEncoding('utf8');
+      req.on('data', chunk => { if ((body += chunk).length > 2048) req.destroy(); });
+      req.on('end', async () => {
+        try { json(res, 200, { ok: true, monitor: await selectMonitor(JSON.parse(body).name) }); }
+        catch (error) { json(res, 400, { error: error.message }); }
+      });
+      return;
+    }
+    if (req.method === 'POST' && url.pathname === '/webrtc/offer') {
+      let body = '';
+      req.setEncoding('utf8');
+      req.on('data', chunk => { if ((body += chunk).length > 1024 * 1024) req.destroy(); });
+      req.on('end', async () => {
+        try {
+          const offer = JSON.parse(body);
+          if (offer.type !== 'offer' || typeof offer.sdp !== 'string') throw new Error('Oferta inválida');
+          json(res, 200, await rtcHost.acceptOffer(offer, offer.nexoVideo));
+        } catch (error) { json(res, 500, { error: error.message || 'No se pudo iniciar WebRTC' }); }
+      });
+      return;
+    }
+    if (req.method === 'POST' && url.pathname === '/microfono/oferta') {
+      let body = '';
+      req.setEncoding('utf8');
+      req.on('data', chunk => { if ((body += chunk).length > 1024 * 1024) req.destroy(); });
+      req.on('end', async () => {
+        try {
+          const oferta = JSON.parse(body);
+          if (oferta.type !== 'offer' || typeof oferta.sdp !== 'string') throw new Error('Oferta inválida');
+          const respuesta = await micHost.aceptarOferta(oferta, { etiqueta: oferta.etiqueta });
+          recordDiagnostic('microfono:oferta', 'ok', 'webrtc');
+          auditAccess('microfono-on', 'ok', device.label);
+          json(res, 200, respuesta);
+        } catch (error) {
+          recordDiagnostic('microfono:oferta', 'error', 'webrtc');
+          json(res, 500, { error: error.message || 'No se pudo abrir el micrófono' });
+        }
+      });
+      return;
+    }
+    if (req.method === 'POST' && url.pathname === '/microfono/silencio') {
+      let body = '';
+      req.setEncoding('utf8');
+      req.on('data', chunk => { if ((body += chunk).length > 1024) req.destroy(); });
+      req.on('end', () => {
+        try { json(res, 200, { ok: true, silenciado: micHost.silenciar(JSON.parse(body).silenciado) }); }
+        catch (error) { json(res, 400, { error: error.message }); }
+      });
+      return;
+    }
+    if (req.method === 'POST' && url.pathname === '/microfono/apagar') {
+      micHost.cerrarPar('apagado desde el cliente');
+      auditAccess('microfono-off', 'ok', device.label);
+      return json(res, 200, { ok: true });
+    }
+    if (req.method === 'GET' && url.pathname === '/microfono/estado') return json(res, 200, micHost.estado());
+    if (req.method === 'GET' && url.pathname === '/screen') {
+      return platform.screenshotJpeg({ monitor, quality: 65 })
+        .then(image => {
+          res.writeHead(200, {
+            'content-type': 'image/jpeg', 'content-length': image.length,
+            'cache-control': 'no-store, no-cache, must-revalidate'
+          });
+          res.end(image);
+        })
+        .catch(error => json(res, 500, { error: error.message }));
+    }
+    if (req.method === 'GET' && url.pathname === '/stream') {
+      res.writeHead(200, {
+        'content-type': 'multipart/x-mixed-replace; boundary=frame',
+        'cache-control': 'no-store, no-cache, must-revalidate',
+        'connection': 'keep-alive'
+      });
+      viewers.add(res);
+      req.on('close', () => { viewers.delete(res); stopJpegIfUnused(); });
+      streamFrames();
+      return;
+    }
+    if (req.method === 'POST' && url.pathname === '/pointer') {
+      let body = '';
+      req.setEncoding('utf8');
+      req.on('data', chunk => { if ((body += chunk).length > 2048) req.destroy(); });
+      req.on('end', async () => {
+        try { enqueuePointer(JSON.parse(body)); recordDiagnostic('pointer', 'received'); json(res, 200, { ok: true }); }
+        catch (error) { json(res, 400, { error: error.message }); }
+      });
+      return;
+    }
+    if (req.method === 'POST' && url.pathname === '/scroll') {
+      let body = '';
+      req.setEncoding('utf8');
+      req.on('data', chunk => { if ((body += chunk).length > 2048) req.destroy(); });
+      req.on('end', () => {
+        try { enqueueScroll(JSON.parse(body)); recordDiagnostic('scroll', 'received'); json(res, 200, { ok: true }); }
+        catch (error) { json(res, 400, { error: error.message }); }
+      });
+      return;
+    }
+    if (req.method === 'POST' && url.pathname === '/workspace') {
+      let body = '';
+      req.setEncoding('utf8');
+      req.on('data', chunk => { if ((body += chunk).length > 1024) req.destroy(); });
+      req.on('end', async () => {
+        try {
+          const { workspace } = JSON.parse(body);
+          await platform.workspace(workspace);
+          recordDiagnostic('workspace');
+          json(res, 200, { ok: true });
+        } catch (error) {
+          json(res, 500, { error: error.message || 'Error interno' });
+        }
+      });
+      return;
+    }
+    if (req.method === 'POST' && url.pathname === '/input') {
+      let body = '';
+      req.setEncoding('utf8');
+      req.on('data', chunk => {
+        body += chunk;
+        if (Buffer.byteLength(body) > 32768) req.destroy();
+      });
+      req.on('end', async () => {
+        try {
+          const data = JSON.parse(body);
+          await inputAction(data);
+          recordDiagnostic(`input:${data.type || 'unknown'}`);
+          json(res, 200, { ok: true });
+        } catch (error) {
+          json(res, 500, { error: error.message || 'Error interno' });
+        }
+      });
+      return;
+    }
+    json(res, 404, { error: 'No encontrado' });
+  } catch (error) {
+    console.error(`Error en petición: ${sanitizeLogError(error)}`);
+    if (!res.headersSent) json(res, 500, { error: 'Error interno' });
+    else res.destroy();
   }
-  if (req.method === 'POST' && url.pathname === '/input') {
-    let body = '';
-    req.setEncoding('utf8');
-    req.on('data', chunk => {
-      body += chunk;
-      if (Buffer.byteLength(body) > 32768) req.destroy();
-    });
-    req.on('end', async () => {
-      try {
-        const data = JSON.parse(body);
-        await inputAction(data);
-        recordDiagnostic(`input:${data.type || 'unknown'}`);
-        json(res, 200, { ok: true });
-      } catch (error) {
-        json(res, 500, { error: error.message || 'Error interno' });
-      }
-    });
-    return;
-  }
-  json(res, 404, { error: 'No encontrado' });
 });
 
 server.on('upgrade', (req, socket, head) => {
@@ -1027,22 +1060,16 @@ server.on('upgrade', (req, socket, head) => {
     const paired = Boolean(devices.get(cookieValue(req, deviceCookieName))) || tokenMatches(url.searchParams.get('token'));
     if ((!isVideo && !isAudio) || !paired || req.headers.upgrade?.toLowerCase() !== 'websocket') return socket.destroy();
     if (authRequired && !requestSession(req)) return socket.destroy();
-    const accept = crypto.createHash('sha1').update(req.headers['sec-websocket-key'] + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
-    socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + accept + '\r\n\r\n');
-    socket.setNoDelay(true);
-    const group = isAudio ? audioViewers : wsViewers;
-    socket.nexoAlive = true;
-    socket.setKeepAlive(true, 30000);
-    group.add(socket);
-    const remove = () => { group.delete(socket); if (isAudio) stopAudioIfUnused(); else stopJpegIfUnused(); };
-    socket.on('data', chunk => {
-      if (!chunk.length) return;
-      const opcode = chunk[0] & 0x0f;
-      if (opcode === 0x0a) socket.nexoAlive = true;
-      if (opcode === 0x08) socket.end(Buffer.from([0x88, 0x00]));
+    wss.handleUpgrade(req, socket, head, ws => {
+      const group = isAudio ? audioViewers : wsViewers;
+      ws.nexoAlive = true;
+      group.add(ws);
+      const remove = () => { group.delete(ws); if (isAudio) stopAudioIfUnused(); else stopJpegIfUnused(); };
+      ws.on('pong', () => { ws.nexoAlive = true; });
+      ws.on('close', remove);
+      ws.on('error', remove);
+      if (isAudio) startAudioCapture(); else streamFrames();
     });
-    socket.on('close', remove); socket.on('error', remove); socket.on('end', remove);
-    if (isAudio) startAudioCapture(); else streamFrames();
   } catch { socket.destroy(); }
 });
 
@@ -1068,7 +1095,6 @@ server.on('error', error => {
       setInterval(updateMonitor, 10000).unref();
     }
     console.log(`Teclado remoto activo en el puerto ${port}`);
-    console.log(`TOKEN=${token}`);
   });
 })().catch(error => {
   console.error(`Error al iniciar el servidor: ${error.message}`);

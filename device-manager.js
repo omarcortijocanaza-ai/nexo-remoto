@@ -9,9 +9,12 @@
 
 const crypto = require('crypto');
 const fs = require('fs');
-const path = require('path');
+const util = require('util');
+const { atomicWriteJson } = require('./lib/safe');
 
+const scryptAsync = util.promisify(crypto.scrypt);
 const DEFAULT_DEVICE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const RENEWAL_THRESHOLD_MS = 15 * 24 * 60 * 60 * 1000;
 const DEFAULT_PAIRING_TTL_MS = 10 * 60 * 1000;
 // Sin O, 0, I ni 1: quien dicta el código por teléfono no debe dudar.
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -27,9 +30,7 @@ function readState(file) {
 }
 
 function writeState(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
-  fs.writeFileSync(file, JSON.stringify(value, null, 2) + '\n', { mode: 0o600 });
-  fs.chmodSync(file, 0o600);
+  atomicWriteJson(file, value, 0o600);
 }
 
 function normalizeCode(value) {
@@ -52,6 +53,11 @@ function randomCode() {
 
 function derive(code, salt) {
   return crypto.scryptSync(code, salt, 32).toString('base64url');
+}
+
+async function deriveAsync(code, salt) {
+  const derived = await scryptAsync(code, salt, 32);
+  return derived.toString('base64url');
 }
 
 function createPairing(file, ttlMs = DEFAULT_PAIRING_TTL_MS) {
@@ -77,6 +83,18 @@ function consumePairing(file, code) {
   if (candidate.length !== CODE_LENGTH) return false;
   const expected = Buffer.from(value.hash);
   const actual = Buffer.from(derive(candidate, value.salt));
+  const matches = expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+  if (matches) writeState(file, { ...value, used: true, usedAt: new Date().toISOString() });
+  return matches;
+}
+
+async function consumePairingAsync(file, code) {
+  const value = readState(file);
+  if (!value || value.used || !(value.expiresAt > Date.now())) return false;
+  const candidate = normalizeCode(code);
+  if (candidate.length !== CODE_LENGTH) return false;
+  const expected = Buffer.from(value.hash);
+  const actual = Buffer.from(await deriveAsync(candidate, value.salt));
   const matches = expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
   if (matches) writeState(file, { ...value, used: true, usedAt: new Date().toISOString() });
   return matches;
@@ -120,8 +138,16 @@ class DeviceStore {
     if (!secret) return null;
     const device = this.devices.get(hashToken(secret));
     if (!device) return null;
-    if (device.expiresAt <= Date.now()) { this.devices.delete(device.hash); this.save(); return null; }
     const now = Date.now();
+    if (device.expiresAt <= now) { this.devices.delete(device.hash); this.save(); return null; }
+    // Renovación deslizante: si al dispositivo le quedan menos de 15 días, se
+    // extiende su caducidad y se avisa al servidor para refrescar la cookie.
+    if (device.expiresAt - now < RENEWAL_THRESHOLD_MS) {
+      device.expiresAt = now + this.maxAgeMs;
+      device.lastSeen = now;
+      this.save();
+      return { ...device, renewed: true };
+    }
     // Escribir en cada petición castigaría el disco sin aportar nada: basta
     // con que la última conexión mostrada tenga unos minutos de resolución.
     if (now - device.lastSeen > LAST_SEEN_WRITE_MS) { device.lastSeen = now; this.save(); }
@@ -162,6 +188,7 @@ module.exports = {
   DeviceStore,
   cancelPairing,
   consumePairing,
+  consumePairingAsync,
   createPairing,
   formatCode,
   normalizeCode,
