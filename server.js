@@ -1190,4 +1190,9 @@ function shutdownServer() {
 
 process.on('SIGTERM', shutdownServer);
 process.on('SIGINT', shutdownServer);
+// Windows no tiene SIGTERM: el lanzador pide el apagado por el canal IPC y, si el
+// lanzador muere a lo bruto, el canal se cierra y el servidor no se queda huérfano
+// ocupando el puerto. En Linux no hay canal IPC: ninguno de los dos eventos ocurre.
+process.on('message', mensaje => { if (mensaje && mensaje.type === 'shutdown') shutdownServer(); });
+process.on('disconnect', shutdownServer);
 process.on('exit', () => platform.close());
