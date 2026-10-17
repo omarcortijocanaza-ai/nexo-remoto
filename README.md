@@ -4,6 +4,10 @@
 > [`AGENTS.md`](AGENTS.md) y el plan completo, con sus prompts, en
 > [`PLAN-MIGRACION-WINDOWS.md`](PLAN-MIGRACION-WINDOWS.md).
 
+> **¿Usas NEXO en un host Windows?** Esta página describe el host Linux (Hyprland). La
+> instalación, el uso diario y la solución de problemas del host Windows están en
+> [`README-WINDOWS.md`](README-WINDOWS.md); el cliente web es el mismo.
+
 NEXO permite ver y controlar una sesión Hyprland desde el celular, con vídeo, audio,
 entrada táctil, teclado y escritorios. Puede publicar acceso local, remoto o ambos.
 Cuando hay varias pantallas, usa por defecto la salida situada en `(0,0)` como monitor
@@ -264,6 +268,8 @@ nexo-control link
 | Documento | Para qué | Vigencia |
 |---|---|---|
 | [`README.md`](README.md) | Cómo se usa. Punto de entrada. | Vigente |
+| [`README-WINDOWS.md`](README-WINDOWS.md) | Instalar y usar NEXO en un host Windows. | Vigente |
+| [`PLAN-MIGRACION-WINDOWS.md`](PLAN-MIGRACION-WINDOWS.md) | Contratos y fases de la migración a Windows; bitácoras en `docs/windows/bitacora/`. | Vigente |
 | [`PROGRESO.md`](PROGRESO.md) | Qué está hecho, qué falta y en qué orden. | Vigente |
 | [`ESTADO-MVP-Y-REINICIO.md`](ESTADO-MVP-Y-REINICIO.md) | Arquitectura multimedia, dependencias y cómo arrancar tras reiniciar. | Vigente |
 | [`PROYECTO-NEXO-EVOLUCION.md`](PROYECTO-NEXO-EVOLUCION.md) | Plan por fases y registro de cada cambio con su motivo. | Vigente |

@@ -156,12 +156,18 @@ test('el lanzador de Windows: arranca, es de instancia única, no escribe el tok
       assert.match(log, /Teclado remoto activo/);
       assert.doesNotMatch(log, /token-de-prueba-lanzador/);
 
+      // Rotación en caliente: rotate-token.js deja un token nuevo y el apagado no debe revertirlo.
+      const archivoEstado = path.join(estado, '.nexo-state.json');
+      const original = JSON.parse(fs.readFileSync(archivoEstado, 'utf8'));
+      fs.writeFileSync(archivoEstado, JSON.stringify({ ...original, token: 'token-rotado', localUrl: '', status: 'rotating' }));
+
       // --stop: parada ordenada y limpieza.
       const parada = spawn(process.execPath, ['launcher.js', '--stop'], { cwd: RAIZ, env: entorno, stdio: 'ignore', windowsHide: true });
       assert.equal(await new Promise(resolve => parada.on('close', resolve)), 0);
       await esperar(async () => !(await salud()), 8000);
       assert.equal(await salud(), false, 'el servidor sigue vivo tras --stop');
       assert.equal(fs.existsSync(path.join(estado, '.nexo-launcher.lock')), false);
+      assert.equal(JSON.parse(fs.readFileSync(archivoEstado, 'utf8')).token, 'token-rotado', 'el apagado deshizo la rotación del token');
       // La bandeja no debe relanzar NEXO tras una parada deliberada.
       assert.equal(fs.existsSync(path.join(estado, '.nexo-stopped')), true, '--stop debe dejar .nexo-stopped');
       // Ningún proceso del árbol del lanzador sobrevive a --stop.

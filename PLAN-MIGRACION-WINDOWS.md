@@ -1681,3 +1681,28 @@ Evalúa y documenta en docs/windows/O3-segunda-sesion.md, con pruebas reales:
 | ICE no encuentra ruta por datos móviles (CGNAT doble) | Alta | O1 (TURN). |
 | El registro de escritorios virtuales cambia en una actualización de Windows | Media | `supported:false` y sólo siguiente/anterior; la prueba 13 lo detecta. |
 | Argon 4 se sale del plan en una fase | Media | `git reset --hard fN-start` y reencargo escrito por Opus. |
+
+---
+
+## 11. Notas posteriores a la implementación (F0–F10)
+
+Lo que la realidad cambió respecto a las secciones anteriores. El detalle y la evidencia están
+en `docs/windows/bitacora/`.
+
+- **4.5 · URL RTP:** `rtp://127.0.0.1:PUERTO?pkt_size=1200&localaddr=127.0.0.1`. Sin `localaddr`,
+  ffmpeg enlaza sus sockets UDP a `0.0.0.0` y Windows muestra el aviso de firewall (F5).
+- **4.5 · Escalado en GPU:** con FFmpeg 9.0-full_build `d3d11-scale` (`Could not create the
+  texture 80070057`) y `cuda-scale` (`derive_device=cuda: -40`) no funcionan en ninguna forma
+  (`-i` ni `-vf`). 720p y 900p usan `cpu-scale`; 1080p en monitores 1080p va por `d3d11-native`.
+- **4.6 · Archivos de estado nuevos:** `.nexo-pids.json` (`{pid, t}` por rol), `.nexo-launcher.lock`,
+  `.nexo-stop` (petición de parada que vigila el lanzador), `.nexo-stopped` (parada deliberada: la
+  bandeja no relanza), `.nexo-gpu-pipeline.json` (con `scaleChain`). Código nuevo común:
+  `lib/lifecycle.js`, `lib/runtime-log.js`.
+- **F8 · Parada:** `node launcher.js --stop` es la parada ordenada en Windows (no hay SIGTERM);
+  la usan `nexo-control stop` y la bandeja. Los hijos Node también se apagan si se cierra el
+  canal IPC (`disconnect`).
+- **F7 · Variable:** `NEXO_MIC_DEVICE` (alias `NEXO_MIC_DEVICE_MATCH`).
+- **Defectos comunes corregidos de paso (afectan a Linux, probar en la fase L):** la rotación del
+  token se deshacía en el apagado (`launcher.js`); el `closed` tardío de un par viejo cerraba al
+  par nuevo del micrófono (`microfono-host.js`); importaciones inexistentes que sólo fallaban en
+  la primera llamada (`test/imports.test.js` lo vigila).

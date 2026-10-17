@@ -78,8 +78,20 @@ function cloudflaredPath() {
 }
 const cloudflared = cloudflaredPath();
 
+// `rotate-token.js` deja en el archivo un token nuevo con estado «rotating» y el
+// lanzador en marcha sigue teniendo el viejo en memoria. Sin esta guarda, el
+// guardado del apagado (`status: stopped`) reescribía el token viejo y la
+// rotación se deshacía sola: el enlace «rotado» seguía siendo el de siempre.
+function rotacionPendiente() {
+  try {
+    const guardado = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+    return guardado.status === 'rotating' && guardado.token !== token;
+  } catch { return false; }
+}
+
 function saveState(extra = {}) {
-  const state = { token, mode, port, localUrl: localUrl(), remoteUrl, updatedAt: new Date().toISOString(), ...extra };
+  if (rotacionPendiente()) return;
+  const state ={ token, mode, port, localUrl: localUrl(), remoteUrl, updatedAt: new Date().toISOString(), ...extra };
   atomicWriteJson(statePath, state, stateMode);
 }
 

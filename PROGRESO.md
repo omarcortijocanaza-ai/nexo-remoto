@@ -257,3 +257,45 @@ No volver a intentarlos sin datos nuevos:
 Emparejamiento por QR, permisos granulares, TLS administrado con dominio propio,
 actualizaciones firmadas, empaquetado reproducible y los avisos de licencia de
 `THIRD_PARTY_NOTICES.md`.
+
+## Windows
+
+> Host Windows de NEXO (rama `windows-port`, etiqueta `windows-v1`). Guía de uso en
+> [`README-WINDOWS.md`](README-WINDOWS.md); plan, contratos y bitácoras de cada fase en
+> [`PLAN-MIGRACION-WINDOWS.md`](PLAN-MIGRACION-WINDOWS.md) y `docs/windows/bitacora/`.
+
+### Hecho (F0–F10)
+- [x] Capa `platform/` (Linux movido sin cambios de lógica; Windows nuevo), `lib/` común.
+- [x] Correcciones comunes C1–C9 (token fuera del registro, cookie malformada ya no tumba el
+      servidor, escrituras atómicas, scrypt asíncrono, subida con presión, `ws`, proxy filtrado).
+- [x] Agente nativo `nexo-agent.exe` (`SendInput`, DXGI, portapapeles, escritorios virtuales,
+      WASAPI loopback y reproducción).
+- [x] Vídeo: `ddagrab` → NVENC → puente Pion (60,2 FPS a 1080p, ≈ 10 % de un núcleo), sondeo de
+      cadena recordado, reposo y vuelta en < 1 s, cambio de perfil y de monitor sin renegociar.
+- [x] Respaldos: WebRTC por CPU y JPEG; audio del sistema sin deriva; micrófono por VB-CABLE.
+- [x] Ciclo de vida: apagado por IPC, instancia única, limpieza de huérfanos, `--stop`,
+      registro enmascarado con rotación, `nexo-control`, `nexo-doctor`, aviso del enlace.
+- [x] Bandeja `nexo-tray.exe`, autoarranque (tarea con privilegios máximos), firewall sólo Privado.
+- [x] `scripts\windows\smoke.ps1` (3 ejecuciones en verde con `-SinEntrada`).
+
+### Pendiente en Windows (todo lo marcado 👤 necesita al dueño, un celular o administrador)
+- [ ] 👤 Ejecutar `install-autostart.ps1` (UAC), cerrar e iniciar sesión, `nexo-control doctor` en
+      verde y «NEXO con privilegios elevados: sí». **Nunca se ejecutó la instalación real.**
+- [ ] 👤 Autologon + reinicio completo: NEXO accesible por Internet sin tocar nada (prueba 31).
+- [ ] 👤 Wake-on-LAN desde apagado hasta Windows, con GRUB arrancando Windows (prueba 32, trampa 17).
+- [ ] 👤 Celular por **datos móviles**: anotar transporte (gpu / rtc / respaldo JPEG), FPS y RTT
+      (prueba 28). Decide si hace falta la fase **O1** (TURN): el host está tras CGNAT.
+- [ ] 👤 Micrófono en Discord con el teléfono bloqueado y la página `/microfono` sola
+      (instalar VB-CABLE primero; pruebas 22–23).
+- [ ] 👤 Tacto (MOVER y DIRECTO), panel de teclado móvil, PiP y audio en segundo plano (6, 7, 10, 33).
+- [ ] 👤 Audio 10 min y cambio de salida por defecto con un cliente oyendo (21); sincronía A/V.
+- [ ] 👤 `smoke.ps1` **sin** `-SinEntrada` (escribe en el Bloc de notas; nunca se ejecutó ese paso).
+- [ ] 👤 UAC y bloqueo reales con un cliente conectado: banner y recuperación sola (26).
+- [ ] `Alt+Tab`, `Alt+F4`, `Ctrl+Shift+C/V` con `nexo-super-bridge.exe` desde un cliente Windows (12).
+- [ ] **Fase L** (verificación en Linux antes de fusionar a `main`): ver las listas «para la fase L»
+      de `F1-opus.md`, `F7-opus.md`, `F8-opus.md` y `F10-opus.md`.
+- [ ] Latencia de punta a punta (cronómetro + foto) y PLI/NACK por Wi-Fi: los contadores existen
+      (`/stats` del puente); falta medirlos con el celular.
+- [ ] Escalado por GPU para 720p/900p: `scale_d3d11` y `scale_cuda` no funcionan con
+      FFmpeg 9.0; hoy usan `cpu-scale` (≈ 50–60 % de un núcleo).
+- [ ] Opcionales del plan: **O1** (TURN), **O2** (HTTPS en LAN), **O3** (segunda sesión, investigación).
