@@ -6,7 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-const { atomicWriteJson, cookieValue, safeDecode } = require('../lib/safe');
+const { atomicWriteJson, cookieValue, readJsonSafe, safeDecode } = require('../lib/safe');
 
 test('safeDecode decodifica cadenas válidas y devuelve null ante secuencias inválidas', () => {
   assert.equal(safeDecode('hola%20mundo'), 'hola mundo');
@@ -36,6 +36,22 @@ test('atomicWriteJson escribe, sobrescribe y no deja archivos .tmp', () => {
 
     const entries = fs.readdirSync(dir);
     assert.deepEqual(entries, ['estado.json']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('readJsonSafe devuelve el contenido o el valor de respaldo sin lanzar', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexo-safe-'));
+  try {
+    const bueno = path.join(dir, 'bueno.json');
+    const roto = path.join(dir, 'roto.json');
+    fs.writeFileSync(bueno, '{"a":1}');
+    fs.writeFileSync(roto, '{"a":');
+    assert.deepEqual(readJsonSafe(bueno, null), { a: 1 });
+    assert.equal(readJsonSafe(roto, null), null);
+    assert.deepEqual(readJsonSafe(path.join(dir, 'no-existe.json'), { b: 2 }), { b: 2 });
+    assert.equal(readJsonSafe(path.join(dir, 'no-existe.json')), null);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
