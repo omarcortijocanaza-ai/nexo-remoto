@@ -28,7 +28,7 @@ function Test-Seccion([string] $Titulo, [scriptblock] $Bloque) {
     try { & $Bloque } catch { Add-Check $Titulo 'FALLA' "la comprobación falló: $($_.Exception.Message)" }
 }
 
-function Get-Estado { try { Get-Content -LiteralPath $ArchivoEstado -Raw -Encoding utf8 | ConvertFrom-Json } catch { $null } }
+function Get-Estado { try { Get-Content -LiteralPath $ArchivoEstado -Raw -Encoding utf8 -ErrorAction Stop | ConvertFrom-Json } catch { $null } }
 $estado = Get-Estado
 $puerto = if ($env:REMOTE_KEYBOARD_PORT) { [int]$env:REMOTE_KEYBOARD_PORT } elseif ($estado -and $estado.port) { [int]$estado.port } else { 8765 }
 
