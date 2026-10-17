@@ -73,6 +73,9 @@ class MicrofonoHost {
     // eco y solapamiento, y nadie sabría cuál está hablando. Gana el último.
     if (this.par) this.cerrarPar('reemplazado por otro dispositivo');
     this.microfono.reiniciarFallos();
+    // Sólo existe en Windows: si falta VB-CABLE el celular recibe un error claro
+    // (500 con el mensaje) en vez de conectarse a un micrófono sin destino.
+    this.microfono.comprobarDestino?.();
 
     const pc = new wrtc.RTCPeerConnection({
       iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }],
@@ -110,7 +113,10 @@ class MicrofonoHost {
       };
     };
     pc.onconnectionstatechange = () => {
-      if (['failed', 'closed'].includes(pc.connectionState)) this.cerrarPar('transporte ' + pc.connectionState);
+      // Sólo si este par sigue siendo el vigente: al reemplazar un celular por otro,
+      // el `closed` tardío del par viejo cerraba al par NUEVO en plena negociación
+      // (el celular veía «signalingState is closed» y tenía que reintentar).
+      if (this.par === par && ['failed', 'closed'].includes(pc.connectionState)) this.cerrarPar('transporte ' + pc.connectionState);
     };
 
     try {
