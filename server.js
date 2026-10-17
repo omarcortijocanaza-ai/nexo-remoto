@@ -273,6 +273,14 @@ function healthAt(targetPort) {
 // aquí; un curioso sin emparejar no ve la dirección.
 async function sessionOptions() {
   if (sessionKind !== 'shared') return { kind: sessionKind, chooser: false };
+  if (!platform.capabilities.independentSession) {
+    return {
+      kind: 'shared',
+      chooser: true,
+      original: { name: 'Mi PC' },
+      alternative: { available: false, supported: false, name: 'NEXO', url: '' }
+    };
+  }
   let alternative = { available: false, name: 'NEXO', url: '' };
   try {
     const state = JSON.parse(fs.readFileSync(alternativeStatePath, 'utf8'));
@@ -309,6 +317,9 @@ let textoTimer = null;
 
 function encolarTexto(texto) {
   textoPendiente += texto;
+  if (TECLEO_AGRUPAR_MS <= 0) {
+    return vaciarTexto();
+  }
   if (!textoTimer) {
     textoTimer = setTimeout(() => {
       vaciarTexto().catch(error => console.error(`Tecleo: ${error.message}`));
@@ -378,7 +389,56 @@ async function selectMonitor(name) {
   return monitor;
 }
 
+let keepAwakeActive = false;
+let keepAwakeTimer = null;
+let currentSecureDesktop = false;
+
+function hasAnyClient() {
+  return Boolean(viewers.size || wsViewers.size || audioViewers.size || rtcHost?.peers?.size);
+}
+
+function syncKeepAwake() {
+  if (hasAnyClient()) {
+    if (keepAwakeTimer) {
+      clearTimeout(keepAwakeTimer);
+      keepAwakeTimer = null;
+    }
+    if (!keepAwakeActive) {
+      keepAwakeActive = true;
+      platform.keepAwake(true);
+    }
+  } else if (keepAwakeActive && !keepAwakeTimer) {
+    keepAwakeTimer = setTimeout(() => {
+      keepAwakeTimer = null;
+      if (!hasAnyClient() && keepAwakeActive) {
+        keepAwakeActive = false;
+        platform.keepAwake(false);
+      }
+    }, 60000);
+    keepAwakeTimer.unref();
+  }
+}
+
+setInterval(syncKeepAwake, 2000).unref();
+
+platform.on('desktop-state', state => {
+  currentSecureDesktop = state === 'secure';
+  const payload = { type: 'secure-desktop', active: currentSecureDesktop };
+  rtcHost?.notify(payload);
+  const textMsg = JSON.stringify(payload);
+  for (const socket of wsViewers) {
+    if (socket.readyState === 1) {
+      try { socket.send(textMsg); } catch {}
+    }
+  }
+});
+
+platform.on('displays-changed', () => {
+  updateMonitor();
+});
+
 function stopJpegIfUnused() {
+  syncKeepAwake();
   if (!viewers.size && !wsViewers.size && jpegStream) {
     jpegStream.stop();
     jpegStream = null;
@@ -386,6 +446,7 @@ function stopJpegIfUnused() {
 }
 
 function streamFrames() {
+  syncKeepAwake();
   if (jpegStream || (!viewers.size && !wsViewers.size)) return;
   try {
     jpegStream = platform.startJpegStream({
@@ -415,6 +476,7 @@ function streamFrames() {
 }
 
 async function startAudioCapture() {
+  syncKeepAwake();
   if (audioCapture || audioStarting || !audioViewers.size) return;
   audioStarting = true;
   let device;
@@ -441,6 +503,7 @@ async function startAudioCapture() {
 }
 
 function stopAudioIfUnused() {
+  syncKeepAwake();
   if (!audioViewers.size && audioCapture) { audioCapture.kill(); audioCapture = null; }
 }
 
@@ -842,7 +905,7 @@ const server = http.createServer((req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/diagnostics') {
       return json(res, 200, {
-        server: { uptimeMs: Date.now() - startedAt, sessionKind, gpuEnabled },
+        server: { uptimeMs: Date.now() - startedAt, sessionKind, gpuEnabled, platform: platform.name },
         monitor: { ...monitor },
         rtc: rtcHost.stats(),
         streams: { jpeg: viewers.size + wsViewers.size, audio: audioViewers.size },
@@ -854,7 +917,7 @@ const server = http.createServer((req, res) => {
     if (req.method === 'GET' && url.pathname === '/diagnostics/export') {
       const report = {
         generatedAt: new Date().toISOString(),
-        server: { uptimeMs: Date.now() - startedAt, sessionKind, gpuEnabled, node: process.version },
+        server: { uptimeMs: Date.now() - startedAt, sessionKind, gpuEnabled, node: process.version, platform: platform.name },
         monitor: { ...monitor }, rtc: rtcHost.stats(),
         streams: { jpeg: viewers.size + wsViewers.size, audio: audioViewers.size },
         recentEvents: diagnosticEvents.slice(-100), files: { count: listFiles().length },
@@ -927,7 +990,9 @@ const server = http.createServer((req, res) => {
         try {
           const offer = JSON.parse(body);
           if (offer.type !== 'offer' || typeof offer.sdp !== 'string') throw new Error('Oferta inválida');
-          json(res, 200, await rtcHost.acceptOffer(offer, offer.nexoVideo));
+          const answer = await rtcHost.acceptOffer(offer, offer.nexoVideo);
+          syncKeepAwake();
+          json(res, 200, answer);
         } catch (error) { json(res, 500, { error: error.message || 'No se pudo iniciar WebRTC' }); }
       });
       return;
@@ -1068,6 +1133,9 @@ server.on('upgrade', (req, socket, head) => {
       ws.on('pong', () => { ws.nexoAlive = true; });
       ws.on('close', remove);
       ws.on('error', remove);
+      if (isVideo && currentSecureDesktop) {
+        try { ws.send(JSON.stringify({ type: 'secure-desktop', active: true })); } catch {}
+      }
       if (isAudio) startAudioCapture(); else streamFrames();
     });
   } catch { socket.destroy(); }
