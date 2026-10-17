@@ -104,6 +104,21 @@ test('tomarBloqueo: instancia única; un bloqueo de un cierre sucio se reemplaza
   }
 });
 
+test('esLanzadorVivo reconoce al lanzador elevado aunque su línea de órdenes salga vacía', async () => {
+  const ahora = Date.now();
+  const lista = procesos => async () => procesos;
+  const base = { pid: 10, ppid: 1, name: 'node.exe', exe: '', created: ahora };
+  // Con línea de órdenes visible.
+  assert.equal(await lifecycle.esLanzadorVivo(10, lista([{ ...base, cmd: 'node.exe launcher.js' }])), true);
+  assert.equal(await lifecycle.esLanzadorVivo(10, lista([{ ...base, cmd: 'node.exe otra-app.js' }]), ahora), false);
+  // Elevado (línea vacía): vale la hora de creación frente a la del bloqueo.
+  assert.equal(await lifecycle.esLanzadorVivo(10, lista([{ ...base, cmd: '' }]), ahora + 500), true);
+  assert.equal(await lifecycle.esLanzadorVivo(10, lista([{ ...base, cmd: '' }]), ahora + 3600000), false, 'PID reutilizado: otra hora');
+  assert.equal(await lifecycle.esLanzadorVivo(10, lista([{ ...base, cmd: '' }])), false, 'sin referencia no se arriesga');
+  assert.equal(await lifecycle.esLanzadorVivo(10, lista([{ ...base, name: 'chrome.exe', cmd: '' }]), ahora), false);
+  assert.equal(await lifecycle.esLanzadorVivo(99, lista([base]), ahora), false);
+});
+
 test('registrarPid guarda {pid, t} por rol y lo quita con pid vacío', () => {
   const dir = carpetaTemporal('nexo-pids-');
   try {

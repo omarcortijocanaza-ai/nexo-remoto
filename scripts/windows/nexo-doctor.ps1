@@ -37,14 +37,15 @@ $puerto = if ($env:REMOTE_KEYBOARD_PORT) { [int]$env:REMOTE_KEYBOARD_PORT } else
 Add-Type -Namespace Nexo -Name Elevacion -MemberDefinition @'
 [DllImport("kernel32.dll")] public static extern IntPtr OpenProcess(uint acceso, bool heredar, int pid);
 [DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr h);
-[DllImport("advapi32.dll")] public static extern bool OpenProcessToken(IntPtr proceso, uint acceso, out IntPtr token);
+[DllImport("advapi32.dll", SetLastError = true)] public static extern bool OpenProcessToken(IntPtr proceso, uint acceso, out IntPtr token);
 [DllImport("advapi32.dll")] public static extern bool GetTokenInformation(IntPtr token, int clase, out int valor, int largo, out int devuelto);
 public static string Elevado(int pid) {
     IntPtr p = OpenProcess(0x1000, false, pid);
     if (p == IntPtr.Zero) return "desconocido";
     IntPtr t;
     try {
-        if (!OpenProcessToken(p, 0x8, out t)) return "desconocido";
+        // Acceso denegado al token de un proceso del mismo usuario = está elevado y quien pregunta no.
+        if (!OpenProcessToken(p, 0x8, out t)) return Marshal.GetLastWin32Error() == 5 ? "si" : "desconocido";
         try { int v; int n; return GetTokenInformation(t, 20, out v, 4, out n) ? (v != 0 ? "si" : "no") : "desconocido"; }
         finally { CloseHandle(t); }
     } finally { CloseHandle(p); }
@@ -97,16 +98,27 @@ Test-Seccion 'Servidor' {
 }
 
 Test-Seccion 'Procesos y privilegios' {
-    $procesos = Get-CimInstance Win32_Process | Where-Object {
-        $linea = [string]$_.CommandLine
-        ($_.Name -match '^(nexo-agent|nexo-gpu-webrtc|nexo-tray|cloudflared)\.exe$') -or ($_.Name -eq 'node.exe' -and $linea -match '(launcher|server|gpu-stream-windows)\.js')
+    $procesos = Get-CimInstance Win32_Process
+    # NEXO corre elevado (tarea con privilegios máximos) y a una consola normal Windows
+    # le oculta su línea de órdenes: se identifica por los PID que anota el lanzador
+    # en .nexo-pids.json, comprobando que la imagen sea la esperada.
+    $registrados = @{}
+    try {
+        $datos = Get-Content -LiteralPath (Join-Path $DirEstado '.nexo-pids.json') -Raw -Encoding utf8 -ErrorAction Stop | ConvertFrom-Json
+        foreach ($rol in 'launcher', 'server', 'gpu', 'tunnel') { if ($datos.$rol.pid) { $registrados[$rol] = [int]$datos.$rol.pid } }
+    } catch {}
+    $buscar = {
+        param($rol, $imagen, $patron)
+        $proceso = $procesos | Where-Object { $_.ProcessId -eq $registrados[$rol] -and $_.Name -eq $imagen } | Select-Object -First 1
+        if (-not $proceso) { $proceso = $procesos | Where-Object { $_.Name -eq $imagen -and [string]$_.CommandLine -match $patron } | Select-Object -First 1 }
+        return $proceso
     }
-    $lanzador = $procesos | Where-Object { $_.Name -eq 'node.exe' -and [string]$_.CommandLine -match 'launcher\.js' } | Select-Object -First 1
+    $lanzador = & $buscar 'launcher' 'node.exe' 'launcher\.js'
     Add-Check 'lanzador' $(if ($lanzador) { 'OK' } else { 'AVISO' }) $(if ($lanzador) { "PID $($lanzador.ProcessId)" } else { 'no hay lanzador activo' })
-    Add-Check 'servidor (node)' $(if ($procesos | Where-Object { [string]$_.CommandLine -match 'server\.js' }) { 'OK' } else { 'AVISO' }) ''
+    Add-Check 'servidor (node)' $(if (& $buscar 'server' 'node.exe' 'server\.js') { 'OK' } else { 'AVISO' }) ''
     Add-Check 'agente nativo' $(if ($procesos | Where-Object { $_.Name -eq 'nexo-agent.exe' }) { 'OK' } else { 'AVISO' }) ''
     $enModoLocal = $estado -and $estado.mode -eq 'local'
-    Add-Check 'túnel (cloudflared)' $(if ($procesos | Where-Object { $_.Name -eq 'cloudflared.exe' }) { 'OK' } elseif ($enModoLocal) { 'OK' } else { 'AVISO' }) $(if ($enModoLocal) { 'modo local: no se usa' } else { '' })
+    Add-Check 'túnel (cloudflared)' $(if (& $buscar 'tunnel' 'cloudflared.exe' 'cloudflared') { 'OK' } elseif ($enModoLocal) { 'OK' } else { 'AVISO' }) $(if ($enModoLocal) { 'modo local: no se usa' } else { '' })
     Add-Check 'bandeja' $(if ($procesos | Where-Object { $_.Name -eq 'nexo-tray.exe' }) { 'OK' } else { 'AVISO' }) 'nexo-tray.exe'
     if ($lanzador) {
         $elevado = [Nexo.Elevacion]::Elevado([int]$lanzador.ProcessId)

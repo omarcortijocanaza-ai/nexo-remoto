@@ -61,11 +61,26 @@ function Start-Nexo {
     # salga por la consola se descarta. Start-Process no admite el mismo destino
     # para stdout y stderr, así que stderr va a un archivo que se vacía en cada
     # arranque (sólo recibe fallos del propio Node antes de abrir el registro).
-    $errores = Join-Path $DirRegistros 'nexo-launcher-stderr.log'
-    Set-Content -LiteralPath $errores -Value '' -Encoding utf8
-    Start-Process -FilePath (Get-Node) -ArgumentList 'launcher.js' -WorkingDirectory $Raiz -WindowStyle Hidden `
-        -RedirectStandardOutput 'NUL' -RedirectStandardError $errores | Out-Null
-    for ($i = 0; $i -lt 40; $i++) { if (Test-Activo) { break }; Start-Sleep -Milliseconds 250 }
+    #
+    # Con el autoarranque instalado (tarea «NEXO», privilegios máximos) se arranca SIEMPRE
+    # por ella: lanzarlo desde esta consola normal lo dejaría sin elevar y Windows
+    # bloquearía la entrada sobre ventanas de administrador. Con NEXO_STATE_DIR definido
+    # (pruebas con estado aparte) se lanza directamente.
+    $usaTarea = (-not $env:NEXO_STATE_DIR) -and [bool](Get-ScheduledTask -TaskName 'NEXO' -ErrorAction SilentlyContinue)
+    if ($usaTarea) {
+        if (Get-Process -Name 'nexo-tray' -ErrorAction SilentlyContinue) {
+            # Tras un «stop» la bandeja (elevada) espera a que se borre la marca de parada deliberada.
+            Remove-Item -LiteralPath (Join-Path $DirEstado '.nexo-stopped') -Force -ErrorAction SilentlyContinue
+        } else {
+            Start-ScheduledTask -TaskName 'NEXO'
+        }
+    } else {
+        $errores = Join-Path $DirRegistros 'nexo-launcher-stderr.log'
+        Set-Content -LiteralPath $errores -Value '' -Encoding utf8
+        Start-Process -FilePath (Get-Node) -ArgumentList 'launcher.js' -WorkingDirectory $Raiz -WindowStyle Hidden `
+            -RedirectStandardOutput 'NUL' -RedirectStandardError $errores | Out-Null
+    }
+    for ($i = 0; $i -lt 60; $i++) { if (Test-Activo) { break }; Start-Sleep -Milliseconds 250 }
     if (-not (Test-Activo)) {
         Write-Error "NEXO no pudo iniciar. Revisa $ArchivoRegistro" -ErrorAction Continue
         exit 1
