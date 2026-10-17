@@ -332,4 +332,14 @@ class AgentClient extends EventEmitter {
   }
 }
 
-module.exports = { AgentClient, DEFAULT_AGENT_PATH };
+// Línea de órdenes de un subcomando independiente del agente (audio-loopback,
+// audio-play, audio-devices): procesos propios, no pasan por `serve`. Respeta
+// NEXO_AGENT_PATH y admite un .js (los agentes falsos de las pruebas).
+function agentCommand(subArgs, agentPath = process.env.NEXO_AGENT_PATH || DEFAULT_AGENT_PATH) {
+  const isJs = agentPath.toLowerCase().endsWith('.js');
+  return isJs
+    ? { command: process.execPath, args: [agentPath, ...subArgs] }
+    : { command: agentPath, args: [...subArgs] };
+}
+
+module.exports = { AgentClient, DEFAULT_AGENT_PATH, agentCommand };

@@ -2,10 +2,10 @@
 
 const { EventEmitter } = require('node:events');
 const { spawn } = require('node:child_process');
-const { killTree } = require('../../lib/proc');
-const { AgentClient } = require('./agent-client');
+const { killTree, runCommand } = require('../../lib/proc');
+const { AgentClient, agentCommand } = require('./agent-client');
 const keymap = require('./keymap');
-const { findFfmpeg, jpegStreamArgs, screenshotArgs, JpegSplitter } = require('./ffmpeg');
+const { findFfmpeg, jpegStreamArgs, rawVideoArgs, screenshotArgs, superviseRawVideo, JpegSplitter } = require('./ffmpeg');
 
 const capabilities = Object.freeze({
   gpuVideo: true,
@@ -394,16 +394,48 @@ function startJpegStream({ monitor, fps = 10, quality = 8, onFrame } = {}) {
   return { stop: () => controller.stop() };
 }
 
+// Audio del sistema: WASAPI loopback dentro de nexo-agent.exe (s16le 48 kHz
+// estéreo por stdout). El agente sigue solo al dispositivo de salida por defecto
+// y rellena de silencio a ritmo real cuando no suena nada, así que aquí no hay
+// que elegir dispositivo (`target` y `latencyMs` del contrato no hacen falta).
+// stdin queda abierto a propósito: si Node muere, el agente lo nota y sale.
 function spawnSystemAudio() {
-  throw new Error('No implementado en Windows todavía (fase F6)');
+  const { command, args } = agentCommand(['audio-loopback', '--rate', '48000', '--channels', '2']);
+  const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  child.stdin.on('error', () => {});
+  return child;
 }
 
-function spawnRawVideo() {
-  throw new Error('No implementado en Windows todavía (fase F6)');
+// Vídeo CPU para el respaldo WebRTC: cuadros yuv420p por stdout. webrtc-host.js
+// espera exactamente ancho*alto*3/2 bytes por cuadro, por eso el supervisor
+// reagrupa y las dimensiones salen pares.
+function spawnRawVideo({ monitor, width, height, fps }) {
+  const outputWidth = Math.max(2, Math.round(Number(width) / 2) * 2);
+  const outputHeight = Math.max(2, Math.round(Number(height) / 2) * 2);
+  return superviseRawVideo({
+    ffmpegBin: findFfmpeg(),
+    args: rawVideoArgs({ index: monitor?.index, fps, width: outputWidth, height: outputHeight, monitor }),
+    frameBytes: outputWidth * outputHeight * 3 / 2,
+    isSecure: () => desktopState === 'secure',
+    onSecureChange: handler => {
+      emitter.on('desktop-state', handler);
+      return () => emitter.off('desktop-state', handler);
+    },
+    log: message => logFn(`[windows] ${message}`)
+  });
 }
 
-function defaultAudioTarget() {
-  return Promise.resolve('');
+// Nombre del dispositivo de salida por defecto (sólo informativo: el servidor lo
+// registra y lo pasa a spawnSystemAudio, que lo ignora). Vacío si no se puede leer.
+async function defaultAudioTarget() {
+  try {
+    const { command, args } = agentCommand(['audio-devices']);
+    const output = await runCommand(command, args, 1024 * 1024);
+    const info = JSON.parse(output.toString('utf8'));
+    return (info.outputs || []).find(device => device.default)?.name || '';
+  } catch {
+    return '';
+  }
 }
 
 function keepAwake(on) {

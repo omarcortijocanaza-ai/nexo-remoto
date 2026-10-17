@@ -3,7 +3,8 @@
 const { spawn, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
-const { Transform } = require('node:stream');
+const { EventEmitter } = require('node:events');
+const { PassThrough, Transform } = require('node:stream');
 const { atomicWriteJson, readJsonSafe } = require('../../lib/safe');
 const { killTree } = require('../../lib/proc');
 
@@ -468,8 +469,137 @@ class JpegSplitter extends Transform {
   }
 }
 
+// Reagrupa los bytes de ffmpeg en cuadros completos. webrtc-host.js trocea el
+// flujo por tamaño fijo (ancho*alto*3/2): si ffmpeg muere a mitad de cuadro y
+// el siguiente arranca sobre el mismo flujo, todo queda desfasado para siempre.
+// Con un reagrupador por cada ejecución sólo pasan cuadros enteros.
+class FrameAligner extends Transform {
+  constructor(frameBytes) {
+    super();
+    this.frameBytes = frameBytes;
+    this.frame = Buffer.allocUnsafe(frameBytes);
+    this.offset = 0;
+  }
+
+  _transform(chunk, _encoding, callback) {
+    let position = 0;
+    while (position < chunk.length) {
+      const count = Math.min(this.frameBytes - this.offset, chunk.length - position);
+      chunk.copy(this.frame, this.offset, position, position + count);
+      this.offset += count;
+      position += count;
+      if (this.offset === this.frameBytes) {
+        this.push(this.frame);
+        this.frame = Buffer.allocUnsafe(this.frameBytes);
+        this.offset = 0;
+      }
+    }
+    callback();
+  }
+}
+
+// Vídeo CPU (respaldo WebRTC) con ffmpeg supervisado. webrtc-host.js reintenta
+// cada 350 ms si el hijo muere, y con ddagrab eso pasa a menudo en Windows
+// (UAC, bloqueo, cambio de resolución: DXGI_ERROR_ACCESS_LOST), así que el
+// reintento con espera creciente 1 s → 5 s y la pausa en escritorio seguro viven
+// aquí. Devuelve la misma forma que el contrato: { child, stream }, donde `child`
+// sólo ofrece lo que webrtc-host usa (stderr, on('error'|'close'), kill()).
+function superviseRawVideo({
+  ffmpegBin,
+  args,
+  frameBytes,
+  isSecure = () => false,
+  onSecureChange = () => () => {},
+  log = () => {},
+  spawnFn = spawn,
+  minBackoffMs = 1000,
+  maxBackoffMs = 5000
+}) {
+  const stream = new PassThrough();
+  const child = new EventEmitter();
+  child.stderr = new PassThrough();
+  let current = null;
+  let stopped = false;
+  let timer = null;
+  let backoff = minBackoffMs;
+  let lastLogAt = 0;
+
+  function launch() {
+    if (stopped || current || timer || isSecure()) return;
+    const proc = spawnFn(ffmpegBin, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    const aligner = new FrameAligner(frameBytes);
+    const startedAt = Date.now();
+    let tail = '';
+    let finished = false;
+    current = proc;
+
+    proc.stdout.pipe(aligner);
+    aligner.on('data', frame => { if (!stopped) stream.write(frame); });
+    proc.stdout.on('error', () => {});
+    proc.stderr.on('data', data => {
+      tail = (tail + data).slice(-300);
+      if (!stopped) child.stderr.write(data);
+    });
+    proc.stderr.on('error', () => {});
+
+    const onEnd = reason => {
+      if (finished) return;
+      finished = true;
+      if (current === proc) current = null;
+      aligner.destroy();
+      if (stopped || isSecure()) return; // en secure se espera el evento 'normal'
+      const lived = Date.now() - startedAt;
+      if (lived > 10000) backoff = minBackoffMs;
+      const delay = backoff;
+      backoff = Math.min(maxBackoffMs, backoff * 2);
+      // Sin esto, un bucle de fallos (monitor desconectado) llenaría el registro.
+      if (Date.now() - lastLogAt > 30000) {
+        lastLogAt = Date.now();
+        log(`Captura CPU terminó (${reason}): ${tail.trim() || 'sin detalle'}; reintentando en ${delay} ms`);
+      }
+      timer = setTimeout(() => { timer = null; launch(); }, delay);
+    };
+    proc.on('error', error => onEnd(error.message));
+    proc.on('close', code => onEnd(`código ${code}`));
+  }
+
+  const unsubscribe = onSecureChange(state => {
+    if (stopped) return;
+    if (state === 'secure') {
+      // ddagrab pierde el acceso en la pantalla protegida; se corta sin esperar.
+      if (current) { try { current.kill(); } catch {} }
+    } else {
+      clearTimeout(timer);
+      timer = null;
+      backoff = minBackoffMs;
+      launch();
+    }
+  });
+
+  child.kill = () => {
+    if (stopped) return true;
+    stopped = true;
+    clearTimeout(timer);
+    timer = null;
+    unsubscribe();
+    const proc = current;
+    current = null;
+    if (proc) {
+      try { proc.kill(); } catch {}
+      if (proc.pid) killTree(proc.pid, 300).catch(() => {});
+    }
+    setImmediate(() => child.emit('close', null));
+    return true;
+  };
+
+  launch();
+  return { child, stream };
+}
+
 module.exports = {
   GPU_CHAINS,
+  FrameAligner,
+  superviseRawVideo,
   findFfmpeg,
   getFfmpegVersion,
   getAvailableFilters,
