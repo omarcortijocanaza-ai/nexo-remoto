@@ -161,8 +161,13 @@ Test-Seccion 'Autoarranque' {
     $tarea = Get-ScheduledTask -TaskName 'NEXO' -ErrorAction SilentlyContinue
     if (-not $tarea) { Add-Check 'tarea programada NEXO' 'AVISO' 'no instalada (scripts\windows\install-autostart.ps1)'; return }
     $alto = $tarea.Principal.RunLevel -eq 'Highest'
-    $alIniciar = [bool]($tarea.Triggers | Where-Object { $_.CimClass.CimClassName -match 'Logon' })
-    Add-Check 'tarea programada NEXO' $(if ($alto -and $alIniciar) { 'OK' } else { 'AVISO' }) "estado $($tarea.State); privilegios más altos: $(if ($alto) { 'sí' } else { 'NO' }); al iniciar sesión: $(if ($alIniciar) { 'sí' } else { 'NO' })"
+    $disparadores = @($tarea.Triggers | Where-Object { $_.CimClass.CimClassName -match 'Logon' })
+    # El panel apaga el autoarranque desactivando el disparador (la tarea sigue existiendo para
+    # abrir NEXO a mano): que exista no basta, hay que mirar si está habilitado.
+    $alIniciar = [bool]($disparadores | Where-Object { $_.Enabled })
+    $apagadoAposta = $disparadores.Count -gt 0 -and -not $alIniciar
+    $texto = if ($alIniciar) { 'sí' } elseif ($apagadoAposta) { 'NO (desactivado desde el panel: NEXO sólo se abre a mano)' } else { 'NO (la tarea no tiene disparador)' }
+    Add-Check 'tarea programada NEXO' $(if ($alto -and ($alIniciar -or $apagadoAposta)) { 'OK' } else { 'AVISO' }) "estado $($tarea.State); privilegios más altos: $(if ($alto) { 'sí' } else { 'NO' }); al iniciar sesión: $texto"
 }
 
 Test-Seccion 'Audio y vídeo' {
