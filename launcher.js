@@ -314,6 +314,7 @@ async function iniciarEnWindows() {
     process.exit(0);
   }
   duenoDelBloqueo = true;
+  fs.rmSync(lifecycle.rutas(stateDir).detenido, { force: true });
   // Un cierre sucio anterior pudo dejar ffmpeg, el agente, el puente o
   // cloudflared vivos ocupando los puertos.
   const limpiados = await lifecycle.barrerHuerfanos({ stateDir, root, log: linea });

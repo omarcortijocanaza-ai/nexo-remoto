@@ -162,6 +162,8 @@ test('el lanzador de Windows: arranca, es de instancia única, no escribe el tok
       await esperar(async () => !(await salud()), 8000);
       assert.equal(await salud(), false, 'el servidor sigue vivo tras --stop');
       assert.equal(fs.existsSync(path.join(estado, '.nexo-launcher.lock')), false);
+      // La bandeja no debe relanzar NEXO tras una parada deliberada.
+      assert.equal(fs.existsSync(path.join(estado, '.nexo-stopped')), true, '--stop debe dejar .nexo-stopped');
       // Ningún proceso del árbol del lanzador sobrevive a --stop.
       const restos = await lifecycle.listProcesses();
       assert.deepEqual(restos.filter(p => p.ppid === lanzador.pid).map(p => p.name), [], 'quedaron hijos del lanzador');
