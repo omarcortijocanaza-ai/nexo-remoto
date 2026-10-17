@@ -79,10 +79,29 @@ func sendWinCtrlArrow(right bool) error {
 	return handleKeys(events)
 }
 
+func waitDesktopIndex(expected int, maxWait time.Duration) int {
+	deadline := time.Now().Add(maxWait)
+	for {
+		info := getDesktopInfo()
+		if !info.Supported {
+			return expected
+		}
+		if info.Index == expected {
+			return info.Index
+		}
+		if time.Now().After(deadline) {
+			return info.Index
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+}
+
 func switchDesktop(target any, stdinClosed <-chan struct{}) (int, error) {
 	if target == nil {
 		return 0, fmt.Errorf("Parámetro target requerido en desktop.switch")
 	}
+
+	info := getDesktopInfo()
 
 	if s, ok := target.(string); ok {
 		trimmed := strings.TrimSpace(strings.ToLower(s))
@@ -90,15 +109,25 @@ func switchDesktop(target any, stdinClosed <-chan struct{}) (int, error) {
 			if err := sendWinCtrlArrow(true); err != nil {
 				return 0, err
 			}
-			time.Sleep(80 * time.Millisecond)
-			return getDesktopInfo().Index, nil
+			expected := info.Index + 1
+			if info.Supported && expected > info.Count {
+				expected = info.Count
+			}
+			idx := waitDesktopIndex(expected, 450*time.Millisecond)
+			time.Sleep(90 * time.Millisecond)
+			return idx, nil
 		}
 		if trimmed == "previous" {
 			if err := sendWinCtrlArrow(false); err != nil {
 				return 0, err
 			}
-			time.Sleep(80 * time.Millisecond)
-			return getDesktopInfo().Index, nil
+			expected := info.Index - 1
+			if expected < 1 {
+				expected = 1
+			}
+			idx := waitDesktopIndex(expected, 450*time.Millisecond)
+			time.Sleep(90 * time.Millisecond)
+			return idx, nil
 		}
 		if n, err := strconv.Atoi(trimmed); err == nil {
 			target = float64(n)
@@ -117,7 +146,6 @@ func switchDesktop(target any, stdinClosed <-chan struct{}) (int, error) {
 		return 0, fmt.Errorf("Tipo de destino de escritorio inválido")
 	}
 
-	info := getDesktopInfo()
 	if !info.Supported {
 		return 0, fmt.Errorf("Escritorios virtuales no soportados por el registro en esta sesión")
 	}
@@ -128,11 +156,14 @@ func switchDesktop(target any, stdinClosed <-chan struct{}) (int, error) {
 	diff := targetIdx - info.Index
 	steps := diff
 	right := true
+	stepDir := 1
 	if steps < 0 {
 		steps = -steps
 		right = false
+		stepDir = -1
 	}
 
+	curIdx := info.Index
 	for i := 0; i < steps; i++ {
 		select {
 		case <-stdinClosed:
@@ -142,16 +173,9 @@ func switchDesktop(target any, stdinClosed <-chan struct{}) (int, error) {
 		if err := sendWinCtrlArrow(right); err != nil {
 			return 0, err
 		}
-		if i+1 < steps {
-			time.Sleep(80 * time.Millisecond)
-		}
+		nextExpected := curIdx + stepDir
+		curIdx = waitDesktopIndex(nextExpected, 450*time.Millisecond)
+		time.Sleep(90 * time.Millisecond)
 	}
-	if steps > 0 {
-		time.Sleep(80 * time.Millisecond)
-	}
-	after := getDesktopInfo()
-	if after.Supported {
-		return after.Index, nil
-	}
-	return targetIdx, nil
+	return curIdx, nil
 }
