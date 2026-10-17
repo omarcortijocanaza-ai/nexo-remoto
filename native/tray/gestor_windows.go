@@ -75,14 +75,11 @@ func (l *Lanzador) puerto() int {
 
 func (l *Lanzador) saludOK() bool { return comprobarSalud(l.puerto()) }
 
-// entorno hereda el del proceso y añade NEXO_MODE=both sólo si no estaba
-// definido (así el dueño puede forzar otro modo desde fuera).
+// entornoLanzador hereda el del proceso. El modo, la GPU y el cable del micrófono los
+// decide el lanzador a partir de .nexo-settings.json (el panel) y, si falta,
+// de los valores por defecto; una variable de entorno explícita gana siempre.
 func entornoLanzador() []string {
-	env := os.Environ()
-	if _, ok := os.LookupEnv("NEXO_MODE"); !ok {
-		env = append(env, "NEXO_MODE=both")
-	}
-	return env
+	return os.Environ()
 }
 
 func (l *Lanzador) arrancar() (*proceso, error) {
@@ -329,6 +326,9 @@ func (v *Vigilante) Iniciar() {
 	}
 	if _, err := os.Stat(rutaConfAviso()); err != nil {
 		return // sin configuración de aviso no hay nada que vigilar
+	}
+	if leerAviso(rutaConfAviso()).Metodo == "ninguno" {
+		return // configurado pero sin método: el script sólo repetiría «sin método de aviso»
 	}
 	pwsh, err := exec.LookPath("pwsh")
 	if err != nil {

@@ -42,6 +42,12 @@ try {
         Invoke-Accion "Unregister-ScheduledTask $NombreTarea" { Unregister-ScheduledTask -TaskName $NombreTarea -Confirm:$false; Write-Host '  ✓ eliminada' -ForegroundColor Green }
     } else { Write-Host '  (no estaba instalada)' }
 
+    Write-Host "`n▶ Acceso directo «NEXO» del menú Inicio" -ForegroundColor Cyan
+    $acceso = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\NEXO.lnk'
+    if (($NombreTarea -eq 'NEXO') -and (Test-Path -LiteralPath $acceso)) {
+        Invoke-Accion "borrar $acceso" { Remove-Item -LiteralPath $acceso -Force; Write-Host '  ✓ eliminado' -ForegroundColor Green }
+    } else { Write-Host '  (no había)' }
+
     Write-Host "`n▶ Reglas de firewall «NEXO …»" -ForegroundColor Cyan
     $reglas = @(Get-NetFirewallRule -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -cmatch '^NEXO ' })
     if ($reglas.Count) {

@@ -140,9 +140,14 @@ Test-Seccion 'Permisos de la carpeta privada' {
 }
 
 Test-Seccion 'Firewall' {
-    $reglas = Get-NetFirewallRule -Direction Inbound -Action Allow -Enabled True -ErrorAction SilentlyContinue | ForEach-Object {
-        $app = $_ | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue
-        if ($app.Program -and $app.Program -match 'nexo-gpu-webrtc|nexo-remoto|\\nodejs\\node\.exe|ffmpeg\.exe') { [pscustomobject]@{ Nombre = $_.DisplayName; Perfil = [string]$_.Profile; Programa = $app.Program } }
+    # Primero se filtran las aplicaciones de NEXO de una sola vez y sólo entonces se piden sus
+    # reglas: preguntar el filtro regla por regla (≈ 300 reglas) tardaba cerca de 40 s.
+    $filtros = @(Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue | Where-Object { $_.Program -match 'nexo-gpu-webrtc|nexo-remoto|\\nodejs\\node\.exe|ffmpeg\.exe' })
+    $reglas = foreach ($filtro in $filtros) {
+        $regla = $filtro | Get-NetFirewallRule -ErrorAction SilentlyContinue
+        if ($regla -and "$($regla.Direction)" -eq 'Inbound' -and "$($regla.Action)" -eq 'Allow' -and "$($regla.Enabled)" -eq 'True') {
+            [pscustomobject]@{ Nombre = $regla.DisplayName; Perfil = [string]$regla.Profile; Programa = $filtro.Program }
+        }
     }
     # -clike: Windows crea reglas «nexo-gpu-webrtc» al preguntar (perfil Público incluido); sólo cuentan las «NEXO …» del instalador.
     $propias = @($reglas | Where-Object { $_.Nombre -clike 'NEXO *' -and $_.Perfil -notmatch 'Public|Any' })

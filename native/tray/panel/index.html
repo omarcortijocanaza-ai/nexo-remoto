@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>NEXO · Panel de control</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232f6fe4'/%3E%3Cpath d='M9 23V9l14 14V9' fill='none' stroke='white' stroke-width='3' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+
+<!-- Iconos en línea (sin recursos externos) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-inicio" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol>
+    <symbol id="i-ajustes" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+    <symbol id="i-emparejar" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></symbol>
+    <symbol id="i-aviso" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></symbol>
+    <symbol id="i-seguridad" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="i-diagnostico" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></symbol>
+    <symbol id="i-reiniciar" viewBox="0 0 24 24"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></symbol>
+    <symbol id="i-copiar" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+    <symbol id="i-power" viewBox="0 0 24 24"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></symbol>
+    <symbol id="i-cerrar" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></symbol>
+  </defs>
+</svg>
+
+<a class="saltar" href="#contenido">Saltar al contenido</a>
+
+<div class="app">
+
+  <aside class="lateral">
+    <div class="marca">
+      <span class="marca-logo" aria-hidden="true">N</span>
+      <span class="marca-texto"><strong>NEXO</strong><small>Panel de control</small></span>
+    </div>
+    <nav class="nav" aria-label="Secciones del panel">
+      <a href="#inicio" data-vista="inicio"><svg class="ico" aria-hidden="true"><use href="#i-inicio"/></svg><span>Inicio</span></a>
+      <a href="#ajustes" data-vista="ajustes"><svg class="ico" aria-hidden="true"><use href="#i-ajustes"/></svg><span>Ajustes</span><i class="punto" id="punto-ajustes" hidden title="Falta reiniciar NEXO"></i></a>
+      <a href="#emparejar" data-vista="emparejar"><svg class="ico" aria-hidden="true"><use href="#i-emparejar"/></svg><span>Emparejar</span></a>
+      <a href="#aviso" data-vista="aviso"><svg class="ico" aria-hidden="true"><use href="#i-aviso"/></svg><span>Aviso</span></a>
+      <a href="#seguridad" data-vista="seguridad"><svg class="ico" aria-hidden="true"><use href="#i-seguridad"/></svg><span>Seguridad</span></a>
+      <a href="#diagnostico" data-vista="diagnostico"><svg class="ico" aria-hidden="true"><use href="#i-diagnostico"/></svg><span>Diagnóstico</span></a>
+    </nav>
+    <div class="lateral-pie">
+      <span class="mini-estado" id="mini-estado" data-est="desconocido"><i></i><span id="mini-estado-texto">Comprobando…</span></span>
+      <small id="version">&nbsp;</small>
+    </div>
+  </aside>
+
+  <div class="principal">
+    <header class="barra">
+      <div class="marca">
+        <span class="marca-logo" aria-hidden="true">N</span>
+        <strong>NEXO</strong>
+      </div>
+      <span class="mini-estado" id="mini-estado-m" data-est="desconocido"><i></i><span id="mini-estado-texto-m">Comprobando…</span></span>
+    </header>
+
+    <main id="contenido" tabindex="-1">
+
+      <!-- Avisos generales (sesión caducada, sin conexión, reinicio pendiente) -->
+      <div id="avisos" class="avisos">
+        <div class="banner banner-error" id="banner-sesion" role="alert" hidden></div>
+        <div class="banner banner-error" id="banner-red" role="alert" hidden></div>
+        <div class="banner banner-aviso" id="banner-reinicio" hidden>
+          <svg class="ico" aria-hidden="true"><use href="#i-reiniciar"/></svg>
+          <div class="banner-texto"><strong>Reinicia NEXO para aplicar los cambios.</strong><span>Tus ajustes ya están guardados.</span></div>
+          <button type="button" class="btn pequeno" data-accion="reiniciar">Reiniciar ahora</button>
+        </div>
+      </div>
+
+      <!-- 1 · Estado y control · 2 · Enlaces -->
+      <section class="vista" id="v-inicio" aria-labelledby="t-inicio">
+        <h1 class="titulo" id="t-inicio">Inicio</h1>
+
+        <div class="tarjeta heroe" id="heroe" data-est="desconocido">
+          <div class="heroe-estado">
+            <div class="pastilla" id="pastilla" role="status" aria-live="polite">
+              <i class="luz" aria-hidden="true"></i>
+              <span id="pastilla-texto">Comprobando…</span>
+            </div>
+            <p class="heroe-detalle" id="estado-detalle">Hablando con la bandeja de NEXO…</p>
+            <p class="ocupado" id="ocupado" hidden><span class="giro" aria-hidden="true"></span><span id="ocupado-texto"></span></p>
+          </div>
+          <div class="acciones">
+            <button type="button" class="btn primario" id="b-iniciar" data-accion="iniciar"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg>Iniciar</button>
+            <button type="button" class="btn" id="b-reiniciar" data-accion="reiniciar"><svg class="ico" aria-hidden="true"><use href="#i-reiniciar"/></svg>Reiniciar</button>
+            <button type="button" class="btn peligro" id="b-detener" data-accion="detener"><svg class="ico" aria-hidden="true"><use href="#i-stop"/></svg>Detener</button>
+          </div>
+        </div>
+
+        <h2 class="subtitulo" id="t-enlaces">Enlaces para el celular</h2>
+        <p class="ayuda">Abre uno de estos enlaces en el navegador de tu celular. No lo compartas con nadie: quien lo tenga puede controlar esta PC.</p>
+
+        <div class="enlaces">
+          <article class="tarjeta enlace" data-que="internet" aria-labelledby="e-internet-t">
+            <header>
+              <h3 id="e-internet-t">Desde Internet</h3>
+              <p>Funciona desde cualquier lugar, con datos móviles o Wi-Fi.</p>
+            </header>
+            <div class="enlace-cuerpo">
+              <code class="enlace-valor" data-campo="valor" aria-label="Enlace de Internet">Aún no disponible</code>
+              <div class="enlace-botones">
+                <button type="button" class="btn pequeno" data-campo="copiar"><svg class="ico" aria-hidden="true"><use href="#i-copiar"/></svg>Copiar</button>
+                <button type="button" class="btn pequeno" data-campo="mostrar" aria-pressed="false">Mostrar</button>
+                <button type="button" class="btn pequeno" data-campo="qr" aria-expanded="false">Código QR</button>
+              </div>
+            </div>
+            <div class="qr" data-campo="qrcaja" hidden>
+              <img alt="Código QR del enlace de Internet" width="220" height="220" data-campo="qrimg">
+              <p class="ayuda" data-campo="qrmsg">Apunta la cámara del celular a este código.</p>
+            </div>
+          </article>
+
+          <article class="tarjeta enlace" data-que="local" aria-labelledby="e-local-t">
+            <header>
+              <h3 id="e-local-t">En la red de tu casa</h3>
+              <p>Más rápido, pero el celular debe estar en el mismo Wi-Fi que esta PC.</p>
+            </header>
+            <div class="enlace-cuerpo">
+              <code class="enlace-valor" data-campo="valor" aria-label="Enlace de la red local">Aún no disponible</code>
+              <div class="enlace-botones">
+                <button type="button" class="btn pequeno" data-campo="copiar"><svg class="ico" aria-hidden="true"><use href="#i-copiar"/></svg>Copiar</button>
+                <button type="button" class="btn pequeno" data-campo="mostrar" aria-pressed="false">Mostrar</button>
+                <button type="button" class="btn pequeno" data-campo="qr" aria-expanded="false">Código QR</button>
+              </div>
+            </div>
+            <div class="qr" data-campo="qrcaja" hidden>
+              <img alt="Código QR del enlace de la red local" width="220" height="220" data-campo="qrimg">
+              <p class="ayuda" data-campo="qrmsg">Apunta la cámara del celular a este código.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- 3 · Ajustes -->
+      <section class="vista" id="v-ajustes" aria-labelledby="t-ajustes" hidden>
+        <h1 class="titulo" id="t-ajustes">Ajustes</h1>
+
+        <div class="tarjeta">
+          <div class="fila-interruptor">
+            <div>
+              <h2 class="subtitulo chico" id="l-auto">Iniciar NEXO al encender la PC</h2>
+              <p class="ayuda" id="d-auto">NEXO se abre solo al iniciar sesión en Windows, y así el celular siempre lo encuentra.</p>
+            </div>
+            <button type="button" class="interruptor" role="switch" aria-checked="false" id="sw-auto" aria-labelledby="l-auto" aria-describedby="d-auto n-auto" disabled><span class="perilla"></span></button>
+          </div>
+          <p class="nota nota-aviso" id="n-auto" hidden></p>
+        </div>
+
+        <form class="tarjeta" id="f-ajustes" autocomplete="off" novalidate>
+          <fieldset class="grupo">
+            <legend class="subtitulo chico">¿Desde dónde quieres usar NEXO?</legend>
+            <label class="opcion"><input type="radio" name="modo" value="both"><span class="opcion-txt"><strong>Red local e Internet</strong><small>Recomendado. Funciona en casa y fuera de casa.</small></span></label>
+            <label class="opcion"><input type="radio" name="modo" value="local"><span class="opcion-txt"><strong>Sólo red local</strong><small>Sólo con el celular en el mismo Wi-Fi. No se crea enlace de Internet.</small></span></label>
+            <label class="opcion"><input type="radio" name="modo" value="remote"><span class="opcion-txt"><strong>Sólo Internet</strong><small>Siempre se entra por el enlace de Internet.</small></span></label>
+          </fieldset>
+
+          <div class="fila-interruptor separada">
+            <div>
+              <h2 class="subtitulo chico" id="l-gpu">Vídeo con la tarjeta gráfica</h2>
+              <p class="ayuda" id="d-gpu">Más fluido y gasta menos procesador. Si ves la pantalla entrecortada o negra, apágalo.</p>
+            </div>
+            <button type="button" class="interruptor" role="switch" aria-checked="true" id="sw-gpu" aria-labelledby="l-gpu" aria-describedby="d-gpu"><span class="perilla"></span></button>
+          </div>
+
+          <div class="campo">
+            <label for="i-mic">Micrófono: nombre del cable virtual</label>
+            <input type="text" id="i-mic" maxlength="80" placeholder="CABLE Input" spellcheck="false" autocomplete="off">
+            <small>Parte del nombre de la salida del cable de audio virtual donde NEXO enviará la voz del celular.</small>
+          </div>
+
+          <div class="acciones fin">
+            <span class="ayuda" id="est-ajustes" aria-live="polite"></span>
+            <button type="submit" class="btn primario" id="b-guardar-ajustes">Guardar ajustes</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- 4 · Emparejar -->
+      <section class="vista" id="v-emparejar" aria-labelledby="t-emparejar" hidden>
+        <h1 class="titulo" id="t-emparejar">Emparejar un dispositivo</h1>
+        <div class="tarjeta">
+          <p>Si el celular o la otra PC todavía no tienen acceso, genera un código de un solo uso y escríbelo en NEXO desde ese dispositivo.</p>
+          <div class="campo en-linea">
+            <label for="s-minutos">Válido durante</label>
+            <select id="s-minutos">
+              <option value="5">5 minutos</option>
+              <option value="10" selected>10 minutos</option>
+              <option value="30">30 minutos</option>
+            </select>
+            <button type="button" class="btn primario" id="b-codigo">Generar código</button>
+          </div>
+          <div class="codigo-caja" id="codigo-caja" hidden>
+            <div class="codigo" id="codigo-valor" aria-label="Código de emparejamiento"></div>
+            <p class="codigo-caduca" id="codigo-caduca" role="timer"></p>
+            <div class="acciones">
+              <button type="button" class="btn pequeno" id="b-copiar-codigo"><svg class="ico" aria-hidden="true"><use href="#i-copiar"/></svg>Copiar código</button>
+            </div>
+            <pre class="texto-chico" id="codigo-texto"></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5 · Aviso del enlace -->
+      <section class="vista" id="v-aviso" aria-labelledby="t-aviso" hidden>
+        <h1 class="titulo" id="t-aviso">Aviso del enlace al celular</h1>
+        <form class="tarjeta" id="f-aviso" autocomplete="off" novalidate>
+          <p>Cuando NEXO arranca puede mandarte el enlace nuevo al celular para que no tengas que copiarlo desde la PC.</p>
+          <fieldset class="grupo">
+            <legend class="subtitulo chico">¿Cómo quieres recibirlo?</legend>
+            <label class="opcion"><input type="radio" name="metodo" value="ninguno"><span class="opcion-txt"><strong>No avisar</strong><small>Tú copias el enlace desde este panel.</small></span></label>
+            <label class="opcion"><input type="radio" name="metodo" value="ntfy"><span class="opcion-txt"><strong>ntfy</strong><small>Una app gratuita de notificaciones. Sin crear cuenta.</small></span></label>
+            <label class="opcion"><input type="radio" name="metodo" value="telegram"><span class="opcion-txt"><strong>Telegram</strong><small>Te llega un mensaje de un bot tuyo.</small></span></label>
+          </fieldset>
+
+          <div class="campos-metodo" id="m-ntfy" hidden>
+            <div class="campo">
+              <label for="i-ntfy-servidor">Servidor de ntfy</label>
+              <input type="text" id="i-ntfy-servidor" placeholder="https://ntfy.sh" spellcheck="false" autocomplete="off" inputmode="url">
+            </div>
+            <div class="campo">
+              <label for="i-ntfy-tema">Tema</label>
+              <input type="text" id="i-ntfy-tema" placeholder="un-nombre-largo-y-dificil" spellcheck="false" autocomplete="off">
+              <small>Elige un nombre difícil de adivinar y suscríbete a él en la app de ntfy del celular.</small>
+            </div>
+          </div>
+
+          <div class="campos-metodo" id="m-telegram" hidden>
+            <div class="campo">
+              <label for="i-tg-token">Clave del bot de Telegram</label>
+              <input type="password" id="i-tg-token" spellcheck="false" autocomplete="new-password">
+              <small id="n-tg-token">Déjalo vacío para conservar la clave guardada.</small>
+            </div>
+            <div class="campo">
+              <label for="i-tg-chat">Número de chat</label>
+              <input type="text" id="i-tg-chat" spellcheck="false" autocomplete="off" inputmode="numeric">
+            </div>
+          </div>
+
+          <div class="acciones fin">
+            <span class="ayuda" id="est-aviso" aria-live="polite"></span>
+            <button type="button" class="btn" id="b-prueba-aviso">Enviar prueba</button>
+            <button type="submit" class="btn primario" id="b-guardar-aviso">Guardar</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- 6 · Seguridad -->
+      <section class="vista" id="v-seguridad" aria-labelledby="t-seguridad" hidden>
+        <h1 class="titulo" id="t-seguridad">Seguridad</h1>
+
+        <form class="tarjeta" id="f-contrasena" autocomplete="off" novalidate>
+          <h2 class="subtitulo chico">Cambiar la contraseña de «Mi PC»</h2>
+          <p class="ayuda">Es la contraseña que NEXO usa para entrar a la sesión de esta PC cuando está en la pantalla de bloqueo. NEXO se reiniciará para aplicarla.</p>
+          <div class="campo">
+            <label for="i-usuario">Usuario de Windows</label>
+            <input type="text" id="i-usuario" autocomplete="username" spellcheck="false">
+          </div>
+          <div class="campo">
+            <label for="i-clave">Contraseña nueva</label>
+            <input type="password" id="i-clave" autocomplete="new-password">
+          </div>
+          <div class="campo">
+            <label for="i-clave2">Repite la contraseña</label>
+            <input type="password" id="i-clave2" autocomplete="new-password">
+            <small class="error-campo" id="e-clave" role="alert" hidden></small>
+          </div>
+          <div class="acciones fin">
+            <button type="submit" class="btn primario" id="b-contrasena">Cambiar contraseña</button>
+          </div>
+        </form>
+
+        <div class="tarjeta">
+          <h2 class="subtitulo chico">Rotar el enlace</h2>
+          <p>Si crees que alguien más tiene tu enlace, genera uno nuevo. Los enlaces que ya compartiste dejarán de funcionar y NEXO se reiniciará (tarda unos 10 segundos).</p>
+          <div class="acciones fin">
+            <button type="button" class="btn peligro" id="b-rotar"><svg class="ico" aria-hidden="true"><use href="#i-reiniciar"/></svg>Rotar el enlace</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 7 · Diagnóstico -->
+      <section class="vista" id="v-diagnostico" aria-labelledby="t-diagnostico" hidden>
+        <h1 class="titulo" id="t-diagnostico">Diagnóstico</h1>
+
+        <div class="tarjeta">
+          <h2 class="subtitulo chico">Revisar que todo esté bien</h2>
+          <p class="ayuda">Comprueba permisos, audio, red y componentes. Puede tardar hasta 15 segundos.</p>
+          <div class="acciones">
+            <button type="button" class="btn primario" id="b-doctor">Ejecutar diagnóstico</button>
+            <span class="ocupado" id="doctor-carga" hidden><span class="giro" aria-hidden="true"></span>Revisando…</span>
+          </div>
+          <pre class="consola" id="doctor-salida" tabindex="0" aria-label="Resultado del diagnóstico" aria-live="polite" hidden></pre>
+        </div>
+
+        <div class="tarjeta">
+          <h2 class="subtitulo chico">Registro de actividad</h2>
+          <p class="ayuda">Las últimas líneas de lo que NEXO ha ido anotando. Útil si necesitas pedir ayuda.</p>
+          <div class="acciones">
+            <button type="button" class="btn" id="b-registro">Ver registro</button>
+            <button type="button" class="btn" id="b-carpeta">Abrir carpeta de registros</button>
+          </div>
+          <pre class="consola" id="registro-salida" tabindex="0" aria-label="Registro de NEXO" hidden></pre>
+        </div>
+      </section>
+
+      <!-- 8 · Pie -->
+      <footer class="pie">
+        <button type="button" class="btn" id="b-cerrar-panel"><svg class="ico" aria-hidden="true"><use href="#i-cerrar"/></svg>Cerrar el panel</button>
+        <button type="button" class="btn peligro-suave" id="b-salir"><svg class="ico" aria-hidden="true"><use href="#i-power"/></svg>Salir de NEXO</button>
+      </footer>
+    </main>
+  </div>
+</div>
+
+<div class="toasts" id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
+
+<dialog id="dlg" aria-labelledby="dlg-titulo" aria-describedby="dlg-texto">
+  <form method="dialog" class="dlg-caja">
+    <h2 id="dlg-titulo"></h2>
+    <p id="dlg-texto"></p>
+    <div class="acciones fin" id="dlg-botones"></div>
+  </form>
+</dialog>
+
+<script src="panel.js"></script>
+</body>
+</html>

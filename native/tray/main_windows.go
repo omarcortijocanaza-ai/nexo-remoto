@@ -7,10 +7,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime/debug"
+	"strconv"
 	"sync"
 	"time"
 
@@ -29,18 +32,22 @@ type app struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	estadoItem  *systray.MenuItem
-	itemRemoto  *systray.MenuItem
-	itemLocal   *systray.MenuItem
-	itemPar     *systray.MenuItem
-	itemLogs    *systray.MenuItem
-	itemReinit  *systray.MenuItem
-	itemSalir   *systray.MenuItem
-	iconos      map[Visual][]byte
-	ultimo      Visual
-	ultimoValid bool
-	remotoOK    bool
-	remotoValid bool
+	ops           *operaciones
+	panel         *Panel
+	panelAlInicio bool
+	itemPanel     *systray.MenuItem
+	estadoItem    *systray.MenuItem
+	itemRemoto    *systray.MenuItem
+	itemLocal     *systray.MenuItem
+	itemPar       *systray.MenuItem
+	itemLogs      *systray.MenuItem
+	itemReinit    *systray.MenuItem
+	itemSalir     *systray.MenuItem
+	iconos        map[Visual][]byte
+	ultimo        Visual
+	ultimoValid   bool
+	remotoOK      bool
+	remotoValid   bool
 
 	parMu sync.Mutex // un solo «generar código» a la vez
 }
@@ -49,18 +56,50 @@ func (a *app) rutaEstado() string {
 	return filepath.Join(a.rutas.StateDir, ".nexo-state.json")
 }
 
-func main() {
-	// Instancia única: si ya hay otra bandeja en esta sesión, salir sin ruido.
-	nombre, _ := windows.UTF16PtrFromString(`Local\NEXO-Tray`)
-	mutex, err := windows.CreateMutex(nil, false, nombre)
-	if err == windows.ERROR_ALREADY_EXISTS {
-		if mutex != 0 {
-			windows.CloseHandle(mutex)
+func hayArgumento(nombre string) bool {
+	for _, a := range os.Args[1:] {
+		if a == nombre {
+			return true
 		}
-		return
 	}
-	// Si CreateMutex falló por otra causa se sigue sin exclusión: peor es no tener bandeja.
+	return false
+}
 
+// esperarInfoPanel espera a que una bandeja recién arrancada publique su panel.
+func esperarInfoPanel(rutas Rutas, limite time.Duration) (infoPanel, bool) {
+	fin := time.Now().Add(limite)
+	for time.Now().Before(fin) {
+		if info, ok := leerInfoPanel(rutas); ok && procesoVivo(info.Pid) {
+			return info, true
+		}
+		time.Sleep(400 * time.Millisecond)
+	}
+	return infoPanel{}, false
+}
+
+func urlDePanel(info infoPanel) string {
+	return "http://127.0.0.1:" + strconv.Itoa(info.Puerto) + "/?k=" + info.Clave
+}
+
+// tareaInstalada dice si existe la tarea programada de NEXO (se puede consultar sin elevar).
+func tareaInstalada() bool {
+	cmd := exec.Command("schtasks", "/query", "/tn", nombreTarea())
+	ocultar(cmd)
+	return cmd.Run() == nil
+}
+
+func main() {
+	// `nexo-tray.exe --icono <ruta.ico>`: escribe el icono de NEXO y sale. Lo usa el
+	// instalador para el acceso directo del menú Inicio (el exe lo genera en código).
+	for i, a := range os.Args[1:] {
+		if a == "--icono" && i+2 < len(os.Args) {
+			if ico, err := generarICO(colorDe(VisualActivo)); err == nil {
+				_ = os.WriteFile(os.Args[i+2], ico, 0o644)
+			}
+			return
+		}
+	}
+	quierePanel := hayArgumento("--panel")
 	exe, err := os.Executable()
 	if err != nil {
 		return
@@ -68,6 +107,43 @@ func main() {
 	rutas := calcularRutas(filepath.Dir(exe), os.Getenv)
 	_ = os.MkdirAll(rutas.StateDir, 0o700)
 	_ = os.MkdirAll(rutas.LogsDir, 0o700)
+
+	// 1) ¿Ya hay una bandeja corriendo (quizá elevada)? Se le pide, a lo sumo, abrir el panel.
+	if info, ok := leerInfoPanel(rutas); ok && procesoVivo(info.Pid) {
+		if quierePanel {
+			_ = abrirVentanaPanel(rutas, urlDePanel(info))
+		}
+		return
+	}
+	// 2) Esta ejecución no está elevada (acceso directo) y hay tarea instalada: la
+	// bandeja debe correr elevada (para controlar ventanas de administrador y
+	// cambiar el autoarranque), así que se la pide a la tarea y se sale.
+	if !esElevado() && os.Getenv("NEXO_TRAY_SIN_TAREA") == "" && tareaInstalada() {
+		cmd := exec.Command("schtasks", "/run", "/tn", nombreTarea())
+		ocultar(cmd)
+		if cmd.Run() == nil {
+			if quierePanel {
+				if info, ok := esperarInfoPanel(rutas, 40*time.Second); ok {
+					_ = abrirVentanaPanel(rutas, urlDePanel(info))
+				}
+			}
+			return
+		}
+	}
+
+	// 3) Instancia única: si otra bandeja ocupa ya el nombre, salir sin ruido. Una
+	// bandeja elevada crea el objeto con una ACL que un proceso normal no puede
+	// abrir: ACCESS_DENIED también significa «ya existe».
+	// NEXO_TRAY_INSTANCIA sólo existe para probar una bandeja aparte de la real.
+	nombre, _ := windows.UTF16PtrFromString(`Local\NEXO-Tray` + os.Getenv("NEXO_TRAY_INSTANCIA"))
+	mutex, err := windows.CreateMutex(nil, false, nombre)
+	if err == windows.ERROR_ALREADY_EXISTS || err == windows.ERROR_ACCESS_DENIED {
+		if mutex != 0 {
+			windows.CloseHandle(mutex)
+		}
+		return
+	}
+	// Si CreateMutex falló por otra causa se sigue sin exclusión: peor es no tener bandeja.
 
 	log, _ := abrirRegistro(rutas.LogsDir) // sin log se sigue igual (Registro nil es válido)
 	defer log.Cerrar()
@@ -89,7 +165,9 @@ func main() {
 		cancel:    cancel,
 		iconos:    map[Visual][]byte{},
 	}
+	a.panelAlInicio = quierePanel
 	systray.Run(a.alIniciar, a.alSalir)
+	borrarInfoPanel(rutas)
 	log.Printf("nexo-tray cerrado")
 }
 
@@ -104,8 +182,12 @@ func (a *app) alIniciar() {
 	}
 	a.aplicarVisual(VisualDetenido)
 
+	a.iniciarPanel()
+	systray.SetOnTapped(func() { go a.abrirPanel() })
+
 	a.estadoItem = systray.AddMenuItem(VisualDetenido.Texto(), "")
 	a.estadoItem.Disable()
+	a.itemPanel = systray.AddMenuItem("Abrir panel de NEXO", "")
 	systray.AddSeparator()
 	a.itemRemoto = systray.AddMenuItem("Copiar enlace de Internet", "")
 	a.itemRemoto.Disable()
@@ -122,11 +204,50 @@ func (a *app) alIniciar() {
 
 	go a.bucleEstado()
 	go a.bucleMenu()
+	if a.panelAlInicio {
+		go a.abrirPanel()
+	}
 }
 
 func (a *app) alSalir() {
 	a.cancel()
 	a.vigilante.Detener()
+	if a.panel != nil {
+		a.panel.Cerrar()
+	}
+}
+
+// abrirPanel abre la ventana del panel de control.
+func (a *app) abrirPanel() {
+	if a.panel == nil {
+		return
+	}
+	if err := abrirVentanaPanel(a.rutas, a.panel.URLInicial()); err != nil {
+		a.log.Printf("no se pudo abrir el panel: %v", err)
+		mostrarMensaje("NEXO", "No se pudo abrir el panel:\n"+err.Error(), mbIconError)
+	}
+}
+
+// iniciarPanel levanta el servidor local del panel y publica su puerto y clave para
+// que el acceso directo del menú Inicio pueda abrirlo.
+func (a *app) iniciarPanel() {
+	var clave [24]byte
+	if _, err := rand.Read(clave[:]); err != nil {
+		a.log.Printf("panel: sin aleatoriedad: %v", err)
+		return
+	}
+	a.ops = nuevasOperaciones(a)
+	a.panel = nuevoPanel(a.ops, hex.EncodeToString(clave[:]))
+	puerto, err := a.panel.Escuchar()
+	if err != nil {
+		a.log.Printf("panel: no se pudo abrir el puerto local: %v", err)
+		a.panel = nil
+		return
+	}
+	if err := guardarInfoPanel(a.rutas, infoPanel{Puerto: puerto, Clave: a.panel.clave, Pid: os.Getpid()}); err != nil {
+		a.log.Printf("panel: no se pudo publicar el puerto: %v", err)
+	}
+	a.log.Printf("panel disponible en el puerto local %s (elevada: %v)", strconv.Itoa(puerto), esElevado())
 }
 
 // aplicarVisual cambia icono y tooltip (sólo cuando el estado cambia).
@@ -184,6 +305,8 @@ func (a *app) bucleMenu() {
 		select {
 		case <-a.ctx.Done():
 			return
+		case <-a.itemPanel.ClickedCh:
+			go a.abrirPanel()
 		case <-a.itemRemoto.ClickedCh:
 			go a.copiarEnlace(true)
 		case <-a.itemLocal.ClickedCh:

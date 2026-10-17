@@ -77,10 +77,39 @@ Esta guía es la del host **Windows**. El host Linux (Arch + Hyprland) se descri
    Input» (salida) y «CABLE Output» (entrada); tu salida por defecto sigue siendo tus parlantes.
 8. Comprueba: `nexo-control doctor` (abre una consola nueva para que el PATH se actualice).
 
+## El panel de NEXO (la aplicación)
+
+Para no depender de comandos hay un **panel de control**: una ventana propia de NEXO.
+Se abre de tres formas: **clic en el icono de la bandeja**, el menú del icono → «Abrir panel
+de NEXO», o buscando **«NEXO»** en el menú Inicio (el instalador crea ese acceso directo;
+puedes anclarlo).
+
+| Sección | Para qué |
+|---|---|
+| **Inicio** | Estado grande («NEXO · activo»), botones **Iniciar / Detener / Reiniciar**, y los dos enlaces para el celular con **Copiar**, **Mostrar** y **código QR** (apunta la cámara del celular al QR). |
+| **Ajustes** | Interruptor **«Iniciar NEXO al encender la PC»** (activa o desactiva el autoarranque sin tocar nada más), de dónde se usa (**red local e Internet / sólo local / sólo Internet**), **vídeo con la tarjeta gráfica** sí/no, y el nombre del cable virtual del micrófono. Los cambios se aplican al reiniciar NEXO; el panel avisa y ofrece «Reiniciar ahora». |
+| **Emparejar** | **Generar código** de un solo uso (5, 10 o 30 minutos) para añadir un dispositivo sin compartir el enlace. |
+| **Aviso** | Que NEXO te mande el enlace nuevo al celular cuando arranque (ntfy o Telegram), con botón de prueba. |
+| **Seguridad** | Cambiar la contraseña de «Mi PC» y **rotar el enlace** (los enlaces compartidos antes dejan de valer). |
+| **Diagnóstico** | Ejecuta el diagnóstico completo y muestra el registro reciente (sin el token). |
+
+Notas:
+
+- El panel lo sirve la bandeja en `127.0.0.1` (sólo esta PC) con una clave que cambia en cada
+  arranque; otras páginas web no pueden hablarle.
+- Para cambiar el autoarranque, la bandeja debe estar abierta **con permisos de administrador**:
+  lo está cuando la inicia la tarea de Windows o el acceso directo «NEXO». Si no, el panel te lo dice.
+- Los ajustes se guardan en `%LOCALAPPDATA%\NEXO\state\.nexo-settings.json`. Una variable de
+  entorno explícita (`NEXO_MODE`, `NEXO_GPU`, `NEXO_MIC_DEVICE`) siempre tiene prioridad.
+- **Tras actualizar NEXO**: «Salir de NEXO» en el panel, `pwsh -File scripts\windows\build.ps1`,
+  `pwsh -File scripts\windows\install-autostart.ps1` (crea el acceso directo) y abrir «NEXO» del menú Inicio.
+
 ## Uso diario
 
 NEXO arranca solo al iniciar sesión y deja un **icono en la bandeja** (si no lo ves,
-está tras la flecha ^). Menú del icono:
+está tras la flecha ^). Todo lo del panel también se puede hacer desde ahí. Menú del icono:
+
+- **Abrir panel de NEXO** (o un clic sobre el icono).
 
 - **Copiar enlace de Internet / Copiar enlace local**: llevan el token; pégalos en el celular.
 - **Generar código de emparejamiento**: código `XXXX-XXXX` de un solo uso.

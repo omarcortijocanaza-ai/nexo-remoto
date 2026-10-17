@@ -100,6 +100,27 @@ try {
         Write-Hecho "registrada: al iniciar sesión $($Usuario.Name), privilegios $NivelEjecucion"
     }
 
+    # ── b2) Acceso directo al panel ──────────────────────────────────────────
+    if ($NombreTarea -eq 'NEXO') {
+        Write-Paso 'Acceso directo «NEXO» (menú Inicio)'
+        $acceso = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\NEXO.lnk'
+        $icono = Join-Path $DirNexo 'nexo.ico'
+        Invoke-Accion "crear $acceso -> $Tray --panel (abre el panel de control)" {
+            if (Test-Path -LiteralPath $Tray) {
+                Start-Process -FilePath $Tray -ArgumentList '--icono', "`"$icono`"" -Wait
+                $shell = New-Object -ComObject WScript.Shell
+                $lnk = $shell.CreateShortcut($acceso)
+                $lnk.TargetPath = $Tray
+                $lnk.Arguments = '--panel'
+                $lnk.WorkingDirectory = $Raiz
+                $lnk.Description = 'Panel de control de NEXO: iniciar, detener, enlaces y ajustes'
+                if (Test-Path -LiteralPath $icono) { $lnk.IconLocation = $icono }
+                $lnk.Save()
+                Write-Hecho 'busca «NEXO» en el menú Inicio (puedes anclarlo)'
+            } else { Write-Aviso "falta ${Tray}: ejecuta build.ps1 y repite" }
+        }
+    }
+
     # ── c) Firewall (sólo perfil Privado) ─────────────────────────────────────
     Write-Paso 'Reglas de firewall (sólo perfil Privado)'
     if ($SinFirewall) { Write-Aviso 'omitido por -SinFirewall' }
@@ -123,9 +144,11 @@ try {
         }
         Write-Aviso 'Sin reglas para el perfil Público: en una red pública NEXO no será alcanzable por LAN (el túnel de Internet sí funciona).'
         # Reglas que Windows creó al preguntar la primera vez, abiertas también al perfil Público.
-        $ajenas = @(Get-NetFirewallRule -Direction Inbound -Action Allow -Enabled True -ErrorAction SilentlyContinue | ForEach-Object {
-            $app = $_ | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue
-            if ($_.DisplayName -cnotlike 'NEXO *' -and $app.Program -and $app.Program -match 'nexo-gpu-webrtc|\\nodejs\\node\.exe|\\ffmpeg\.exe' -and ([string]$_.Profile -match 'Public|Any' -or [string]$_.Profile -eq '0')) { $_ }
+        # Se filtran primero las aplicaciones de una vez (preguntar regla por regla tarda ≈ 40 s).
+        $filtros = @(Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue | Where-Object { $_.Program -match 'nexo-gpu-webrtc|\\nodejs\\node\.exe|\\ffmpeg\.exe' })
+        $ajenas = @($filtros | ForEach-Object {
+            $regla = $_ | Get-NetFirewallRule -ErrorAction SilentlyContinue
+            if ($regla -and "$($regla.Direction)" -eq 'Inbound' -and "$($regla.Action)" -eq 'Allow' -and "$($regla.Enabled)" -eq 'True' -and $regla.DisplayName -cnotlike 'NEXO *' -and ([string]$regla.Profile -match 'Public|Any' -or [string]$regla.Profile -eq '0')) { $regla }
         })
         if ($ajenas.Count) {
             $nombres = ($ajenas | ForEach-Object { $_.DisplayName } | Select-Object -Unique) -join ', '

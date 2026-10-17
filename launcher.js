@@ -13,12 +13,16 @@ const { killTree } = require('./lib/proc');
 const { atomicWriteJson } = require('./lib/safe');
 const { RotatingLog, maskSecrets } = require('./lib/runtime-log');
 const lifecycle = require('./lib/lifecycle');
+const { entornoDeAjustes, leerAjustes } = require('./lib/settings');
 
 const esWindows = process.platform === 'win32';
 const root = __dirname;
 const stateDir = defaultStateDir(root);
 fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
-const mode = (process.env.NEXO_MODE || 'both').toLowerCase();
+// Ajustes del panel (.nexo-settings.json); una variable de entorno explícita gana siempre.
+const ajustes = leerAjustes(stateDir);
+const entornoHijos = { ...process.env, ...entornoDeAjustes(ajustes) };
+const mode = (process.env.NEXO_MODE || ajustes.modo || 'both').toLowerCase();
 if (!['local', 'remote', 'both'].includes(mode)) throw new Error('NEXO_MODE debe ser local, remote o both');
 
 const statePath = process.env.NEXO_STATE_FILE || path.join(stateDir, '.nexo-state.json');
@@ -91,7 +95,14 @@ function rotacionPendiente() {
 
 function saveState(extra = {}) {
   if (rotacionPendiente()) return;
-  const state ={ token, mode, port, localUrl: localUrl(), remoteUrl, updatedAt: new Date().toISOString(), ...extra };
+  // `ajustes` son los valores con los que corre este lanzador: el panel los compara con
+  // lo guardado para avisar «reinicia para aplicar».
+  const aplicados = {
+    modo: mode,
+    gpu: entornoHijos.NEXO_GPU !== '0',
+    micDispositivo: entornoHijos.NEXO_MIC_DEVICE || ajustes.micDispositivo
+  };
+  const state = { token, mode, port, localUrl: localUrl(), remoteUrl, ajustes: aplicados, updatedAt: new Date().toISOString(), ...extra };
   atomicWriteJson(statePath, state, stateMode);
 }
 
@@ -133,7 +144,7 @@ function registrar(rol, hijo) {
 
 function startServer() {
   const child = spawnNode('server.js', {
-    ...process.env,
+    ...entornoHijos,
     REMOTE_KEYBOARD_TOKEN: token,
     REMOTE_KEYBOARD_PORT: String(port),
     REMOTE_KEYBOARD_HOST: mode === 'remote' ? '127.0.0.1' : '0.0.0.0'
@@ -167,7 +178,7 @@ function startServer() {
 }
 
 function startGpu() {
-  if (gpu || stopping || process.env.NEXO_GPU === '0') return;
+  if (gpu || stopping || entornoHijos.NEXO_GPU === '0') return;
   let gpuScript = 'gpu-stream.js';
   if (esWindows) {
     gpuScript = 'gpu-stream-windows.js';
@@ -179,7 +190,7 @@ function startGpu() {
       return;
     }
   }
-  gpu = spawnNode(gpuScript, process.env);
+  gpu = spawnNode(gpuScript, entornoHijos);
   const actual = gpu;
   children.add(actual);
   registrar('gpu', actual);

@@ -50,6 +50,8 @@ type Estado struct {
 	RemoteURL string `json:"remoteUrl"` // vacío mientras no haya túnel
 	Status    string `json:"status"`    // running | reconnecting | stopped
 	UpdatedAt string `json:"updatedAt"`
+	// Ajustes con los que arrancó el lanzador (puede faltar en estados antiguos).
+	Ajustes *Ajustes `json:"ajustes"`
 }
 
 // Rutas agrupa las carpetas que usa la bandeja.

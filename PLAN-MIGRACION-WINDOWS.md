@@ -1706,3 +1706,16 @@ en `docs/windows/bitacora/`.
   token se deshacía en el apagado (`launcher.js`); el `closed` tardío de un par viejo cerraba al
   par nuevo del micrófono (`microfono-host.js`); importaciones inexistentes que sólo fallaban en
   la primera llamada (`test/imports.test.js` lo vigila).
+
+### 11.1 Panel de control (fuera del plan original, pedido por el dueño)
+
+`nexo-tray.exe` sirve ahora un **panel web** local (`native/tray/panel/`, contrato en
+`panel/CONTRATO.md`) que se abre en una ventana de Edge en modo aplicación: iniciar/detener/
+reiniciar, interruptor de autoarranque (activa o desactiva el disparador de la tarea «NEXO»),
+enlaces con QR, ajustes (`.nexo-settings.json`, leídos por `lib/settings.js` en el lanzador),
+emparejar, aviso del enlace, contraseña, rotar y diagnóstico. El acceso directo «NEXO» del menú
+Inicio ejecuta `nexo-tray.exe --panel`: si hay una bandeja corriendo le pide abrir el panel; si no,
+la levanta por la tarea (elevada). Seguridad: sólo 127.0.0.1, clave por arranque canjeada por una
+cookie `HttpOnly; SameSite=Strict`, comprobación de `Host` y `Origin`, cabecera `X-NEXO-Panel` en los
+`POST`. El lanzador anota en `.nexo-state.json` los `ajustes` con los que corre para que el panel
+avise de «reinicia para aplicar».
