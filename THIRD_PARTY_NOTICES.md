@@ -31,3 +31,19 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+---
+
+## Fuentes tipográficas (apariencias de NEXO)
+
+NEXO incluye en `assets/fuentes/` las familias Barlow, Barlow Condensed, JetBrains Mono, Cinzel, Atkinson
+Hyperlegible, Public Sans, DM Mono, Caveat y Bricolage Grotesque, descargadas de Google Fonts. Todas se distribuyen
+bajo la SIL Open Font License, Version 1.1 (https://openfontlicense.org/open-font-license-official-text/).
+Los derechos de autor pertenecen a los autores de cada familia (ver `assets/fuentes/LEEME.md`).
+
+## Arte de «Rey Muerto»
+
+`assets/viego/*-pixel.svg` son dibujos en pixel art de aficionado, generados desde cero por
+`docs/diseno/pixel/generar-rey.js`, inspirados en el personaje Viego de League of Legends. No incluyen ni trazan
+ningún recurso de Riot Games. Viego y League of Legends son marcas de Riot Games, Inc.; NEXO no está afiliado a Riot Games.

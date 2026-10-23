@@ -1,0 +1,75 @@
+/* NATIVA · se parece a las apps del sistema (Windows 11 en la PC, iOS/Android en el celular):
+   listas agrupadas, títulos grandes, controles segmentados, azul de sistema. Lo familiar no se aprende. */
+
+.m[data-t="nativa"] {
+  --f-t: "Segoe UI Variable Display", "SF Pro Display", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --f-c: "Segoe UI Variable Text", "SF Pro Text", -apple-system, "Segoe UI", system-ui, sans-serif; --f-n: var(--f-c);
+  --r: 9px; --rg: 14px;
+}
+.m[data-t="nativa"][data-modo="claro"] {
+  --bg: #f1f1f6; --sup: #ffffff; --sup2: #e8e8ee; --bd: rgba(60, 60, 67, .16); --tx: #0c0c10; --su: #6a6a74;
+  --ac: #0a68f5; --ac-tx: #fff; --ok: #1fa64f; --av: #e08a00; --ml: #e0392e;
+}
+.m[data-t="nativa"][data-modo="oscuro"] {
+  --bg: #161618; --sup: #242427; --sup2: #333337; --bd: rgba(255, 255, 255, .11); --tx: #f4f4f7; --su: #a0a0aa;
+  --ac: #4c93ff; --ac-tx: #06142d; --ok: #43c46c; --av: #f0a736; --ml: #ff6259;
+}
+[data-t="nativa"] .btn { border-radius: var(--r); font-weight: 600; background: var(--sup); border-color: var(--bd); box-shadow: 0 1px 0 var(--bd); }
+[data-t="nativa"] .btn.pri { box-shadow: none; }
+[data-t="nativa"] .btn.grande { border-radius: 14px; }
+[data-t="nativa"] .btn.txt { box-shadow: none; background: transparent; }
+
+[data-t="nativa"].pnl { grid-template-columns: 232px 1fr; }
+[data-t="nativa"].pnl .nav { background: transparent; border-right: 0; padding: 22px 12px; }
+[data-t="nativa"].pnl .marca { font-weight: 650; font-size: 18px; }
+[data-t="nativa"].pnl .it { font-weight: 500; color: var(--tx); height: 38px; position: relative; }
+[data-t="nativa"].pnl .it .i { color: var(--su); }
+[data-t="nativa"].pnl .it.on { background: var(--sup); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+[data-t="nativa"].pnl .it.on .i { color: var(--ac); }
+[data-t="nativa"].pnl .it.on::before { content: ""; position: absolute; left: 0; top: 11px; bottom: 11px; width: 3px; border-radius: 3px; background: var(--ac); }
+[data-t="nativa"].pnl .cuerpo { gap: 16px; padding: 24px 28px 20px 8px; }
+[data-t="nativa"] .cab { padding-top: 2px; }
+[data-t="nativa"] .est h1 { font-size: 30px; font-weight: 650; letter-spacing: -.01em; }
+[data-t="nativa"] .est .luz { width: 12px; height: 12px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 22%, transparent); }
+[data-t="nativa"] .conecta { grid-template-columns: 198px 1fr; padding: 18px; gap: 24px; border: 0; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+[data-t="nativa"] .qrbox { width: 198px; height: 198px; border: 1px solid var(--bd); }
+[data-t="nativa"] .pasos { gap: 11px; }
+[data-t="nativa"] .pasos h2 { font-size: 20px; font-weight: 650; }
+[data-t="nativa"] .pasos ol { list-style: none; padding: 0; counter-reset: p; }
+[data-t="nativa"] .pasos li { counter-increment: p; display: flex; gap: 10px; align-items: center; }
+[data-t="nativa"] .pasos li::before { content: counter(p); width: 22px; height: 22px; border-radius: 50%; background: color-mix(in srgb, var(--ac) 16%, transparent); color: var(--ac); font-size: 12px; font-weight: 700; display: grid; place-items: center; flex: none; }
+[data-t="nativa"] .via button { font-weight: 600; }
+[data-t="nativa"] .enlace code { border: 0; background: var(--sup2); }
+/* los cuatro estados como una lista agrupada, con iconos de color */
+[data-t="nativa"] .datos { grid-template-columns: 1fr; gap: 0; background: var(--sup); border-radius: var(--rg); box-shadow: 0 1px 2px rgba(0,0,0,.06); overflow: hidden; }
+[data-t="nativa"] .dato { border: 0; border-radius: 0; background: transparent; align-items: center; padding: 8px 14px 8px 14px; position: relative; }
+[data-t="nativa"] .dato + .dato::before { content: ""; position: absolute; top: 0; left: 58px; right: 0; height: 1px; background: var(--bd); }
+[data-t="nativa"] .dato > .i { margin: 0; width: 30px; height: 30px; padding: 6px; border-radius: 8px; color: #fff; stroke-width: 2; }
+[data-t="nativa"] .dato:nth-child(1) > .i { background: #0a84ff; } [data-t="nativa"] .dato:nth-child(2) > .i { background: #30b455; }
+[data-t="nativa"] .dato:nth-child(3) > .i { background: #8e5be8; } [data-t="nativa"] .dato:nth-child(4) > .i { background: #f08a1c; }
+[data-t="nativa"] .dato > div { display: flex; align-items: center; width: 100%; gap: 10px; }
+[data-t="nativa"] .dato small { order: 0; font-size: 15px; color: var(--tx); font-weight: 500; flex: 0 0 120px; }
+[data-t="nativa"] .dato b { order: 1; font-size: 15px; font-weight: 600; margin: 0; flex: 0 0 150px; }
+[data-t="nativa"] .dato em { order: 2; margin-left: auto; text-align: right; }
+
+[data-t="nativa"] .acc-p h2, [data-t="nativa"] .elegir h2 { font-size: 34px; font-weight: 700; letter-spacing: -.02em; }
+[data-t="nativa"] .cod span { background: var(--sup); border: 0; box-shadow: 0 1px 2px rgba(0,0,0,.08); border-radius: 12px; font-weight: 600; }
+[data-t="nativa"] .cod span.ac { box-shadow: 0 0 0 2px var(--ac); }
+[data-t="nativa"] .elegir .dest { border: 0; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+[data-t="nativa"] .elegir .mini { border: 0; border-radius: 10px; }
+[data-t="nativa"] .elegir .dest b { font-weight: 650; }
+
+[data-t="nativa"] .ses .hud > * { background: color-mix(in srgb, var(--sup) 90%, transparent); border: 0; backdrop-filter: blur(14px); }
+[data-t="nativa"] .ses .hud .met { font-family: var(--f-c); }
+[data-t="nativa"] .ses .bar { background: color-mix(in srgb, var(--sup) 92%, transparent); backdrop-filter: blur(18px); border: 0; border-radius: 22px; box-shadow: 0 6px 24px rgba(0,0,0,.28); padding: 5px; }
+[data-t="nativa"] .ses .t { border-radius: 17px; font-weight: 500; }
+[data-t="nativa"] .ses .t.on { background: color-mix(in srgb, var(--ac) 15%, transparent); color: var(--ac); }
+[data-t="nativa"] .ses .hoja { border: 0; border-radius: 22px 22px 0 0; background: var(--bg); }
+[data-t="nativa"] .ses .hoja h3 { font-weight: 650; }
+[data-t="nativa"] .ses .rej button { background: var(--sup); border: 0; border-radius: 12px; box-shadow: 0 1px 1px rgba(0,0,0,.05); }
+[data-t="nativa"] .ses .rej button .i { color: var(--ac); }
+[data-t="nativa"] .ses .calidad { background: var(--sup2); }
+[data-t="nativa"] .ses .calidad button.on { box-shadow: 0 1px 3px rgba(0,0,0,.2); color: var(--tx); }
+[data-t="nativa"] .pcw .tbar { background: color-mix(in srgb, var(--sup) 94%, transparent); backdrop-filter: blur(16px); border-bottom: 1px solid var(--bd); }
+[data-t="nativa"] .pcw .tbar .cen button.on { background: color-mix(in srgb, var(--ac) 14%, transparent); color: var(--ac); }
+[data-t="nativa"] .marca-m span { font-weight: 650; font-size: 16px; }

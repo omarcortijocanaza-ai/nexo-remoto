@@ -29,8 +29,9 @@ const MS_SIN_SENAL = 45000;
 const MS_TOLERANCIA_BACHE = 30000;
 
 class MicrofonoHost {
-  constructor({ onLog = () => {} } = {}) {
+  constructor({ onLog = () => {}, obtenerIce = null } = {}) {
     this.onLog = onLog;
+    this.obtenerIce = obtenerIce;
     this.microfono = new MicrofonoVirtual({ onLog });
     this.par = null;
     this.ultimoCierre = null;
@@ -77,8 +78,9 @@ class MicrofonoHost {
     // (500 con el mensaje) en vez de conectarse a un micrófono sin destino.
     this.microfono.comprobarDestino?.();
 
+    const iceServers = this.obtenerIce ? await this.obtenerIce() : [{ urls: 'stun:stun.cloudflare.com:3478' }];
     const pc = new wrtc.RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }],
+      iceServers,
       bundlePolicy: 'max-bundle'
     });
     const par = {

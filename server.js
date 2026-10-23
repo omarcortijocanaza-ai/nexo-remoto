@@ -2,8 +2,10 @@
 'use strict';
 
 const http = require('http');
+const https = require('https');
 const crypto = require('crypto');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { Transform, pipeline } = require('stream');
 const { WebSocketServer } = require('ws');
@@ -12,6 +14,10 @@ const { MicrofonoHost } = require('./microfono-host');
 const { browserKeyCommand } = require('./keyboard-translation');
 const platform = require('./platform');
 const { defaultStateDir } = require('./lib/paths');
+const { crearProveedorIce, cabeceraParaPuente } = require('./lib/ice');
+const tlsLan = require('./lib/tls-lan');
+const aparienciaCliente = require('./lib/apariencia');
+const { crearEstaticos, crearPlantilla } = require('./lib/estaticos');
 const { atomicWriteJson, cookieValue, safeDecode } = require('./lib/safe');
 const { DEFAULT_MAX_AGE_MS, SessionStore, authPath, loadAuth, verifyAuthAsync } = require('./auth-manager');
 const { DEFAULT_DEVICE_MAX_AGE_MS, DeviceStore, consumePairingAsync } = require('./device-manager');
@@ -23,8 +29,11 @@ const gpuBridgePort = Math.max(1024, Math.min(65535, Number(process.env.NEXO_GPU
 const sessionKind = process.env.NEXO_SESSION_KIND || 'shared';
 const alternativeStatePath = process.env.NEXO_ALTERNATIVE_STATE || '/var/lib/nexo-session/.nexo-state.json';
 const token = process.env.REMOTE_KEYBOARD_TOKEN || crypto.randomBytes(12).toString('base64url');
-const page = fs.readFileSync(path.join(__dirname, 'index.html'));
-const micPage = fs.readFileSync(path.join(__dirname, 'microfono.html'));
+// Las dos páginas se leen de nuevo si el archivo cambia, y cada petición les inyecta la
+// apariencia vigente (tema y modo elegidos en el panel), sin reiniciar NEXO.
+const page = crearPlantilla(path.join(__dirname, 'index.html'));
+const micPage = crearPlantilla(path.join(__dirname, 'microfono.html'));
+const estaticos = crearEstaticos({ raiz: __dirname });
 const micClient = fs.readFileSync(path.join(__dirname, 'microfono-cliente.js'));
 // Audio de sostén: dos segundos en bucle a un LSB de amplitud. Inaudible en el
 // celular, pero Android lo cuenta como reproducción y saca la notificación de
@@ -56,6 +65,7 @@ const viegoWallpaper = fs.readFileSync(path.join(__dirname, 'assets', 'viego-wal
 const windowsSuperBridge = path.join(__dirname, 'windows-helper', 'dist', 'nexo-super-bridge.exe');
 const stateDir = defaultStateDir(__dirname);
 fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
+const lectorApariencia = aparienciaCliente.crearLector(stateDir);
 const viewers = new Set();
 const wsViewers = new Set();
 const audioViewers = new Set();
@@ -277,7 +287,7 @@ async function sessionOptions() {
     return {
       kind: 'shared',
       chooser: true,
-      original: { name: 'Mi PC' },
+      original: { name: 'Mi PC', host: os.hostname() },
       alternative: { available: false, supported: false, name: 'NEXO', url: '' }
     };
   }
@@ -293,7 +303,7 @@ async function sessionOptions() {
       };
     }
   } catch {}
-  return { kind: 'shared', chooser: true, original: { name: 'Mi PC original' }, alternative };
+  return { kind: 'shared', chooser: true, original: { name: 'Mi PC original', host: os.hostname() }, alternative };
 }
 
 function readGpuProfile() {
@@ -628,7 +638,11 @@ async function inputAction(data) {
   throw new Error(`Entrada inválida (tipo=${data.type} key=${JSON.stringify(v.key)} code=${JSON.stringify(v.code)})`);
 }
 
+// STUN + TURN (si el dueño configuró uno en el panel); se comparte con el micrófono y con el puente GPU.
+const iceProveedor = crearProveedorIce({ stateDir, log: message => console.error(message) });
+
 rtcHost = new WebRtcHost({
+  obtenerIce: () => iceProveedor.obtener(),
   getMonitor: () => monitor,
   getAudioTarget: () => platform.defaultAudioTarget(),
   spawnRawVideo: opts => platform.spawnRawVideo(opts),
@@ -652,9 +666,10 @@ rtcHost = new WebRtcHost({
 // El micrófono del celular vive aparte del escritorio remoto: se enciende y se
 // apaga solo, sobrevive a que se cierre la pantalla compartida y no toca la
 // negociación de vídeo, que ya funciona y no conviene mover.
-const micHost = new MicrofonoHost({ onLog: message => console.error(message) });
+const micHost = new MicrofonoHost({ onLog: message => console.error(message), obtenerIce: () => iceProveedor.obtener() });
 
-const server = http.createServer((req, res) => {
+// El mismo manejador atiende HTTP (siempre) y HTTPS en la LAN (si el dueño lo activó en el panel).
+function manejarPeticion(req, res) {
   try {
     let url;
     try {
@@ -663,6 +678,15 @@ const server = http.createServer((req, res) => {
       return json(res, 400, { error: 'URL inválida' });
     }
     if (url.pathname === '/health') return json(res, 200, { ok: true });
+    if (req.method === 'GET' && url.pathname === '/nexo-lan.cer') {
+      const publico = tlsLan.leerCertificadoPublico(stateDir);
+      if (!publico) return json(res, 404, { error: 'El HTTPS de la LAN no está activado' });
+      res.writeHead(200, { 'content-type': 'application/x-x509-ca-cert', 'content-length': publico.length, 'content-disposition': 'attachment; filename="nexo-lan.cer"', 'cache-control': 'no-store' });
+      return res.end(publico);
+    }
+    // CSS, fuentes y arte del cliente: lista blanca, sin secretos y antes del candado de
+    // dispositivos, porque la pantalla de emparejar también necesita verse bien.
+    if (estaticos.servir(req, res, url)) return;
     if (req.method === 'GET' && url.pathname === '/assets/viego-mist-keyboard.webp') {
       res.writeHead(200, { 'content-type': 'image/webp', 'content-length': keyboardBackground.length, 'cache-control': 'public, max-age=86400' });
       return res.end(keyboardBackground);
@@ -684,7 +708,8 @@ const server = http.createServer((req, res) => {
       return res.end(micKeepAlive);
     }
     if (req.method === 'GET' && url.pathname === '/manifest.webmanifest') {
-      return json(res, 200, { name: 'NEXO Control remoto', short_name: 'NEXO', start_url: '/', scope: '/', display: 'standalone', background_color: '#06100e', theme_color: '#07110f', icons: [{ src: '/assets/viego-wallpaper.webp', sizes: '512x512', type: 'image/webp', purpose: 'any maskable' }] });
+      const fondoApp = aparienciaCliente.colorDeFondo(lectorApariencia.obtener());
+      return json(res, 200, { name: 'NEXO Control remoto', short_name: 'NEXO', start_url: '/', scope: '/', display: 'standalone', background_color: fondoApp, theme_color: fondoApp, icons: [{ src: '/assets/viego-wallpaper.webp', sizes: '512x512', type: 'image/webp', purpose: 'any maskable' }] });
     }
     if (req.method === 'GET' && url.pathname === '/sw.js') {
       const worker = "const CACHE='nexo-static-v3';const ASSETS=['/assets/viego-wallpaper.webp','/assets/viego-mist-keyboard.webp'];self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)))});self.addEventListener('activate',e=>e.waitUntil(Promise.all([caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))),self.clients.claim()])));self.addEventListener('fetch',e=>{if(e.request.method==='GET'&&ASSETS.some(a=>new URL(e.request.url).pathname===a))e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)))})";
@@ -731,23 +756,30 @@ const server = http.createServer((req, res) => {
       }).catch(error => json(res, 400, { error: error.message }));
     }
     if (req.method === 'GET' && url.pathname === '/') {
+      const html = aparienciaCliente.inyectar(page.texto(), lectorApariencia.obtener(), { version: estaticos.version });
       res.writeHead(200, {
         'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store',
         'content-security-policy': "default-src 'self'; img-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'"
       });
-      return res.end(page);
+      return res.end(html);
     }
     // La interfaz de micrófono se entrega igual que la principal, antes de exigir
     // dispositivo emparejado: sin la página no habría dónde escribir el código de
     // emparejamiento. Las rutas que mueven audio sí quedan detrás del candado.
     if (req.method === 'GET' && url.pathname === '/microfono') {
+      const html = aparienciaCliente.inyectar(micPage.texto(), lectorApariencia.obtener(), { version: estaticos.version });
       res.writeHead(200, {
         'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store',
         'content-security-policy': "default-src 'self'; img-src 'self' blob:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'"
       });
-      return res.end(micPage);
+      return res.end(html);
     }
     if (!device) return json(res, 403, { error: 'Empareja este dispositivo para continuar', pairing: true });
+    // Tema y modo que el dueño eligió en el panel; el cliente lo consulta de vez en cuando
+    // para cambiar de apariencia sin recargar la sesión.
+    if (req.method === 'GET' && url.pathname === '/apariencia') {
+      return json(res, 200, { ...lectorApariencia.obtener(), temas: aparienciaCliente.TEMAS });
+    }
     if (req.method === 'GET' && url.pathname === '/auth/status') {
       const session = requestSession(req);
       return json(res, 200, { required: authRequired, configured: !authRequired || Boolean(authConfig), authenticated: Boolean(session), username: authConfig?.username || (authRequired ? '' : 'nexo') });
@@ -961,15 +993,26 @@ const server = http.createServer((req, res) => {
       // muestre por error el monitor de la sesión física.
       if (!gpuEnabled) return json(res, 503, { error: 'GPU WebRTC desactivado para esta sesión' });
       const targetPath = url.pathname.replace(/^\/gpu-webrtc/, '');
-      const headers = { host: `127.0.0.1:${gpuBridgePort}` };
-      if (req.headers['content-type']) headers['content-type'] = req.headers['content-type'];
-      if (req.headers['content-length']) headers['content-length'] = req.headers['content-length'];
-      const proxy = http.request({ host: '127.0.0.1', port: gpuBridgePort, method: req.method, path: targetPath, headers }, upstream => {
-        res.writeHead(upstream.statusCode || 502, upstream.headers);
-        upstream.pipe(res);
-      });
-      proxy.on('error', error => json(res, 502, { error: `GPU WebRTC: ${error.message}` }));
-      req.pipe(proxy);
+      const reenviar = cabeceraIce => {
+        const headers = { host: `127.0.0.1:${gpuBridgePort}` };
+        if (req.headers['content-type']) headers['content-type'] = req.headers['content-type'];
+        if (req.headers['content-length']) headers['content-length'] = req.headers['content-length'];
+        // Sólo se reenvían cabeceras elegidas a mano: un cliente no puede colar su propia X-Nexo-Ice.
+        if (cabeceraIce) headers['x-nexo-ice'] = cabeceraIce;
+        const proxy = http.request({ host: '127.0.0.1', port: gpuBridgePort, method: req.method, path: targetPath, headers }, upstream => {
+          res.writeHead(upstream.statusCode || 502, upstream.headers);
+          upstream.pipe(res);
+        });
+        proxy.on('error', error => json(res, 502, { error: `GPU WebRTC: ${error.message}` }));
+        req.pipe(proxy);
+      };
+      // El puente vive días y las credenciales TURN caducan: cada oferta lleva las vigentes.
+      if (req.method === 'POST') iceProveedor.obtener().then(servidores => reenviar(cabeceraParaPuente(servidores)), () => reenviar(null));
+      else reenviar(null);
+      return;
+    }
+    if (req.method === 'GET' && url.pathname === '/ice') {
+      iceProveedor.obtener().then(iceServers => json(res, 200, { iceServers }), error => json(res, 500, { error: error.message }));
       return;
     }
     if (req.method === 'POST' && url.pathname === '/monitor') {
@@ -1115,9 +1158,10 @@ const server = http.createServer((req, res) => {
     if (!res.headersSent) json(res, 500, { error: 'Error interno' });
     else res.destroy();
   }
-});
+}
+const server = http.createServer(manejarPeticion);
 
-server.on('upgrade', (req, socket, head) => {
+function manejarUpgrade(req, socket, head) {
   try {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const isVideo = url.pathname === '/live';
@@ -1139,7 +1183,8 @@ server.on('upgrade', (req, socket, head) => {
       if (isAudio) startAudioCapture(); else streamFrames();
     });
   } catch { socket.destroy(); }
-});
+}
+server.on('upgrade', manejarUpgrade);
 
 // Un puerto ocupado o denegado emitía un evento 'error' sin escuchar, lo que
 // mataba el proceso y perdía todas las sesiones autenticadas. Reintentar aquí
@@ -1152,6 +1197,35 @@ server.on('error', error => {
   setTimeout(() => server.listen(port, host), retryMs);
 });
 
+// HTTPS en la LAN (O2): puerto NEXO_TLS_PORT, sólo si el lanzador lo pidió y el equipo escucha en la red.
+// Cualquier fallo se anota y NEXO sigue por HTTP: el HTTPS es una mejora, no una dependencia.
+let servidorTls = null;
+async function iniciarTls() {
+  const puertoTls = Number(process.env.NEXO_TLS_PORT) || 0;
+  if (!puertoTls) return;
+  if (['127.0.0.1', 'localhost', '::1'].includes(host)) {
+    console.error('HTTPS LAN omitido: NEXO sólo escucha en esta PC (modo sólo Internet).');
+    return;
+  }
+  const registrar = message => console.error(message);
+  try {
+    const cert = await tlsLan.asegurarCertificado({ stateDir, log: registrar });
+    servidorTls = https.createServer({ pfx: cert.pfx, passphrase: cert.passphrase, minVersion: 'TLSv1.2' }, manejarPeticion);
+    servidorTls.on('upgrade', manejarUpgrade);
+    servidorTls.on('error', error => registrar(`HTTPS LAN: ${error.code || error.message}`));
+    servidorTls.listen(puertoTls, host, () => console.log(`HTTPS en la LAN activo en el puerto ${puertoTls}`));
+    // Si la PC cambia de red, el certificado deja de cubrir su IP: se rehace y se cambia en caliente.
+    setInterval(async () => {
+      try {
+        const nuevo = await tlsLan.asegurarCertificado({ stateDir, log: registrar });
+        if (nuevo.regenerado) servidorTls.setSecureContext({ pfx: nuevo.pfx, passphrase: nuevo.passphrase });
+      } catch (error) { registrar(`HTTPS LAN: no se pudo renovar el certificado (${error.message})`); }
+    }, 5 * 60 * 1000).unref();
+  } catch (error) {
+    registrar(`HTTPS LAN no disponible: ${error.message}`);
+  }
+}
+
 (async () => {
   await platform.init({ log: message => console.error(message), stateDir });
   await updateMonitor();
@@ -1163,6 +1237,7 @@ server.on('error', error => {
       setInterval(updateMonitor, 10000).unref();
     }
     console.log(`Teclado remoto activo en el puerto ${port}`);
+    iniciarTls();
   });
 })().catch(error => {
   console.error(`Error al iniciar el servidor: ${error.message}`);
@@ -1179,6 +1254,7 @@ function shutdownServer() {
   // reinicio de NEXO, Discord y OBS perderían la entrada que tenían elegida y
   // habría que volver a seleccionarla a mano cada vez.
   micHost.cerrar();
+  servidorTls?.close();
   server.close(() => process.exit(0));
   // `server.close()` espera a que terminen las conexiones abiertas, y un
   // cliente remoto mantiene la suya indefinidamente: el proceso se quedaba

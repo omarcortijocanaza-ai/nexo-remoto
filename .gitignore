@@ -1,5 +1,6 @@
 # Dependencias: se instalan con `npm ci` en cada máquina
 node_modules/
+dist/
 
 # Estado privado de NEXO: token, hash de contraseña, dispositivos emparejados,
 # código de emparejamiento, perfil y monitor. NUNCA al repositorio.
@@ -26,3 +27,6 @@ windows-helper/dist/
 *.pfx
 *.pem
 *.key
+
+# Herramientas locales de Claude Code
+.claude/

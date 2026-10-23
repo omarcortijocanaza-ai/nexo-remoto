@@ -25,6 +25,9 @@ type Ajustes struct {
 	Modo           string `json:"modo"` // both | local | remote
 	GPU            bool   `json:"gpu"`
 	MicDispositivo string `json:"micDispositivo"`
+	// HTTPSLan activa el HTTPS de la red local (puerto 8443, certificado propio): sin él el
+	// celular no deja usar el micrófono por Wi-Fi porque la página no es «segura».
+	HTTPSLan bool `json:"httpsLan"`
 }
 
 var ajustesPorDefecto = Ajustes{Modo: "both", GPU: true, MicDispositivo: "CABLE Input"}
@@ -45,6 +48,7 @@ func leerAjustes(ruta string) Ajustes {
 		Modo           *string `json:"modo"`
 		GPU            *bool   `json:"gpu"`
 		MicDispositivo *string `json:"micDispositivo"`
+		HTTPSLan       *bool   `json:"httpsLan"`
 	}
 	if json.Unmarshal(datos, &crudo) != nil {
 		return salida
@@ -59,6 +63,9 @@ func leerAjustes(ruta string) Ajustes {
 		if mic := recortarMic(*crudo.MicDispositivo); mic != "" {
 			salida.MicDispositivo = mic
 		}
+	}
+	if crudo.HTTPSLan != nil {
+		salida.HTTPSLan = *crudo.HTTPSLan
 	}
 	return salida
 }

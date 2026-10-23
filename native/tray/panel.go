@@ -7,19 +7,29 @@ package main
 // El contrato completo está en panel/CONTRATO.md.
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"crypto/subtle"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 	"time"
 )
 
-//go:embed panel/index.html panel/panel.css panel/panel.js
+// Todo lo que sirve el panel va aquí dentro y nada más: la lista de lo que se puede pedir sale de
+// recorrer este sistema de archivos (ver recursosPanel), no de la ruta que llegue en la petición.
+// panel/fuentes y panel/img son copias de assets/ (las genera scripts/ui/sync-recursos-panel.js).
+//
+//go:embed panel/index.html panel/panel.css panel/panel.js panel/tema-inicial.js panel/temas panel/fuentes panel/img
 var archivosPanel embed.FS
 
 const (
@@ -38,6 +48,8 @@ type Autoarranque struct {
 type Enlaces struct {
 	Internet string `json:"internet"`
 	Local    string `json:"local"`
+	// LocalSeguro es el enlace HTTPS de la LAN; vacío si esa función está apagada o no arrancó.
+	LocalSeguro string `json:"localSeguro"`
 }
 
 // EstadoPanel es la respuesta de GET /api/estado.
@@ -63,10 +75,67 @@ type AvisoPanel struct {
 	TieneTelegramToken bool   `json:"tieneTelegramToken"`
 }
 
+// TurnPanel es la configuración del TURN SIN secretos (GET /api/turn): del token de Cloudflare y de
+// la contraseña del TURN manual sólo se dice si existen.
+type TurnPanel struct {
+	Proveedor       string   `json:"proveedor"` // ninguno | cloudflare | manual
+	CloudflareKeyID string   `json:"cloudflareKeyId"`
+	TieneAPIToken   bool     `json:"tieneApiToken"`
+	ManualURLs      []string `json:"manualUrls"`
+	ManualUsuario   string   `json:"manualUsuario"`
+	TieneCredencial bool     `json:"tieneCredencial"`
+}
+
+// TurnEntrada es lo que manda el panel al guardar. Un secreto vacío conserva el guardado.
+type TurnEntrada struct {
+	Proveedor  string `json:"proveedor"`
+	Cloudflare struct {
+		KeyID    string `json:"keyId"`
+		APIToken string `json:"apiToken"`
+	} `json:"cloudflare"`
+	Manual struct {
+		URLs       []string `json:"urls"`
+		Usuario    string   `json:"usuario"`
+		Credencial string   `json:"credencial"`
+	} `json:"manual"`
+	OlvidarSecretos bool `json:"olvidarSecretos"`
+}
+
+// PerfilRed es una red conectada y su categoría de Windows (Public | Private | DomainAuthenticated).
+type PerfilRed struct {
+	Nombre    string `json:"nombre"`
+	Interfaz  string `json:"interfaz"`
+	Categoria string `json:"categoria"`
+}
+
+// ReglaPublica es una regla de firewall que Windows creó para NEXO y que vale en redes públicas.
+type ReglaPublica struct {
+	Nombre    string `json:"nombre"`
+	Programa  string `json:"programa"`
+	Protocolo string `json:"protocolo"`
+}
+
+// RedPanel resume la red y el firewall (GET /api/red). Consultar el firewall tarda unos segundos:
+// la interfaz lo pide al abrir la sección, no en el sondeo de /api/estado.
+type RedPanel struct {
+	Comprobado     bool           `json:"comprobado"` // false = no se pudo consultar (ver Error)
+	Error          string         `json:"error,omitempty"`
+	Perfiles       []PerfilRed    `json:"perfiles"`
+	TodasPublicas  bool           `json:"todasPublicas"` // ninguna red conectada es Privada ni de Dominio
+	ReglasPublicas []ReglaPublica `json:"reglasPublicas"`
+	ReglasNexo     int            `json:"reglasNexo"` // reglas «NEXO …» (sólo perfil Privado)
+	ReglaHTTPS     bool           `json:"reglaHttps"` // existe la regla del puerto HTTPS de la LAN
+	PuertoHTTPS    int            `json:"puertoHttps"`
+	Elevado        bool           `json:"elevado"`
+}
+
 // Operaciones es lo que el panel puede pedirle a NEXO. Los errores devueltos
 // se muestran tal cual al usuario: deben estar en español y ser comprensibles.
 type Operaciones interface {
 	Estado() EstadoPanel
+	LeerApariencia() Apariencia
+	GuardarApariencia(a Apariencia) (Apariencia, error)
+	LeerDispositivos() []DispositivoPanel
 	Iniciar()
 	Detener()
 	Reiniciar()
@@ -78,6 +147,13 @@ type Operaciones interface {
 	LeerAviso() AvisoPanel
 	GuardarAviso(a Aviso, conservarToken bool) error
 	ProbarAviso() (string, error)
+	LeerTurn() (TurnPanel, error)
+	GuardarTurn(t TurnEntrada) (TurnPanel, error)
+	ProbarTurn() (string, error)
+	Red() (RedPanel, error)
+	MarcarRedPrivada() (RedPanel, error)
+	CerrarReglasPublicas(forzar bool) (RedPanel, string, error)
+	AbrirPuertoHTTPS() (RedPanel, error)
 	Doctor() (string, error)
 	Registro() string
 	AbrirRegistros() error
@@ -229,25 +305,94 @@ func (p *Panel) paginaEstatica(w http.ResponseWriter, r *http.Request) {
 		p.noAutorizado(w, false)
 		return
 	}
-	nombre, tipo := "", ""
-	switch r.URL.Path {
-	case "/", "/index.html":
-		nombre, tipo = "panel/index.html", "text/html; charset=utf-8"
-	case "/panel.css":
-		nombre, tipo = "panel/panel.css", "text/css; charset=utf-8"
-	case "/panel.js":
-		nombre, tipo = "panel/panel.js", "text/javascript; charset=utf-8"
-	default:
+	rutaURL := r.URL.Path
+	if rutaURL == "/" {
+		rutaURL = "/index.html"
+	}
+	rec, ok := recursosPanel[rutaURL]
+	if !ok {
 		http.NotFound(w, r)
 		return
 	}
-	datos, err := archivosPanel.ReadFile(nombre)
+	datos, err := archivosPanel.ReadFile(rec.archivo)
 	if err != nil {
 		http.Error(w, "recurso no encontrado", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", tipo)
+	w.Header().Set("Content-Type", rec.tipo)
+	if rutaURL == "/index.html" {
+		datos = p.conAparienciaInicial(datos)
+	}
+	if rec.etag != "" {
+		// Fuentes e imágenes pesan y casi nunca cambian: se revalidan con ETag (la respuesta es un 304
+		// de unos pocos bytes) en vez de bajarse enteras en cada apertura del panel.
+		w.Header().Set("ETag", rec.etag)
+		w.Header().Set("Cache-Control", "private, no-cache")
+		http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(datos))
+		return
+	}
 	_, _ = w.Write(datos)
+}
+
+// conAparienciaInicial escribe en <html> el tema y la preferencia de modo elegidos. Así la página
+// llega ya vestida con la apariencia correcta y tema-inicial.js sólo tiene que resolver «automático»
+// antes del primer pintado: sin destello del tema equivocado. Los valores salen de listas cerradas.
+func (p *Panel) conAparienciaInicial(html []byte) []byte {
+	a := p.ops.LeerApariencia()
+	if !temaValido(a.Tema) {
+		a.Tema = aparienciaPorDefecto.Tema
+	}
+	if !modoAparienciaValido(a.Modo) {
+		a.Modo = aparienciaPorDefecto.Modo
+	}
+	marca := []byte(`<html lang="es">`)
+	nueva := []byte(fmt.Sprintf(`<html lang="es" data-tema="%s" data-pref="%s">`, a.Tema, a.Modo))
+	return bytes.Replace(html, marca, nueva, 1)
+}
+
+// recursoPanel es un archivo embebido que el panel sabe servir.
+type recursoPanel struct {
+	archivo string // ruta dentro de archivosPanel
+	tipo    string // Content-Type
+	etag    string // vacío = sin caché (HTML, CSS y JS del panel); con valor = se revalida
+}
+
+var tiposRecurso = map[string]string{
+	".html":  "text/html; charset=utf-8",
+	".css":   "text/css; charset=utf-8",
+	".js":    "text/javascript; charset=utf-8",
+	".woff2": "font/woff2",
+	".svg":   "image/svg+xml",
+	".webp":  "image/webp",
+	".png":   "image/png",
+}
+
+// recursosPanel: URL → archivo embebido. Se arma una sola vez recorriendo el sistema de archivos
+// embebido; una ruta que no esté aquí da 404 (no hay forma de pedir nada fuera de lo embebido).
+var recursosPanel = construirRecursosPanel()
+
+func construirRecursosPanel() map[string]recursoPanel {
+	m := map[string]recursoPanel{}
+	_ = fs.WalkDir(archivosPanel, "panel", func(archivo string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		ext := strings.ToLower(path.Ext(archivo))
+		tipo, ok := tiposRecurso[ext]
+		if !ok {
+			return nil
+		}
+		rec := recursoPanel{archivo: archivo, tipo: tipo}
+		if ext != ".html" && ext != ".css" && ext != ".js" {
+			if datos, err := archivosPanel.ReadFile(archivo); err == nil {
+				suma := sha256.Sum256(datos)
+				rec.etag = `"` + hex.EncodeToString(suma[:8]) + `"`
+			}
+		}
+		m["/"+strings.TrimPrefix(archivo, "panel/")] = rec
+		return nil
+	})
+	return m
 }
 
 func (p *Panel) api(w http.ResponseWriter, r *http.Request) {
@@ -274,6 +419,37 @@ func (p *Panel) api(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case metodo == http.MethodGet && ruta == "estado":
 		escribirJSON(w, http.StatusOK, p.ops.Estado())
+	case metodo == http.MethodGet && ruta == "apariencia":
+		respuestaOK(w, map[string]any{"apariencia": p.ops.LeerApariencia()})
+	case metodo == http.MethodPost && ruta == "apariencia":
+		// Los campos que no lleguen conservan su valor actual: la interfaz puede mandar sólo lo que cambió.
+		var cuerpo struct {
+			Tema           *string `json:"tema"`
+			Modo           *string `json:"modo"`
+			PorDispositivo *bool   `json:"porDispositivo"`
+		}
+		if err := leerCuerpo(r, &cuerpo); err != nil {
+			respuestaError(w, err)
+			return
+		}
+		nueva := p.ops.LeerApariencia()
+		if cuerpo.Tema != nil {
+			nueva.Tema = *cuerpo.Tema
+		}
+		if cuerpo.Modo != nil {
+			nueva.Modo = *cuerpo.Modo
+		}
+		if cuerpo.PorDispositivo != nil {
+			nueva.PorDispositivo = *cuerpo.PorDispositivo
+		}
+		guardada, err := p.ops.GuardarApariencia(nueva)
+		if err != nil {
+			respuestaError(w, err)
+			return
+		}
+		respuestaOK(w, map[string]any{"apariencia": guardada})
+	case metodo == http.MethodGet && ruta == "dispositivos":
+		respuestaOK(w, map[string]any{"dispositivos": p.ops.LeerDispositivos()})
 	case metodo == http.MethodPost && ruta == "iniciar":
 		p.ops.Iniciar()
 		respuestaOK(w, nil)
@@ -380,6 +556,67 @@ func (p *Panel) api(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		respuestaOK(w, map[string]any{"texto": texto})
+	case metodo == http.MethodGet && ruta == "turn":
+		turn, err := p.ops.LeerTurn()
+		if err != nil {
+			respuestaError(w, err)
+			return
+		}
+		respuestaOK(w, map[string]any{"turn": turn})
+	case metodo == http.MethodPost && ruta == "turn":
+		var cuerpo TurnEntrada
+		if err := leerCuerpo(r, &cuerpo); err != nil {
+			respuestaError(w, err)
+			return
+		}
+		turn, err := p.ops.GuardarTurn(cuerpo)
+		if err != nil {
+			respuestaError(w, err)
+			return
+		}
+		respuestaOK(w, map[string]any{"turn": turn})
+	case metodo == http.MethodPost && ruta == "turn/prueba":
+		texto, err := p.ops.ProbarTurn()
+		if err != nil {
+			respuestaError(w, err)
+			return
+		}
+		respuestaOK(w, map[string]any{"texto": texto})
+	case metodo == http.MethodGet && ruta == "red":
+		red, err := p.ops.Red()
+		if err != nil {
+			respuestaError(w, err)
+			return
+		}
+		respuestaOK(w, map[string]any{"red": red})
+	case metodo == http.MethodPost && ruta == "red/privada":
+		red, err := p.ops.MarcarRedPrivada()
+		if err != nil {
+			respuestaError(w, err)
+			return
+		}
+		respuestaOK(w, map[string]any{"red": red})
+	case metodo == http.MethodPost && ruta == "red/cerrar-publicas":
+		var cuerpo struct {
+			Forzar bool `json:"forzar"`
+		}
+		if err := leerCuerpo(r, &cuerpo); err != nil {
+			respuestaError(w, err)
+			return
+		}
+		red, mensaje, err := p.ops.CerrarReglasPublicas(cuerpo.Forzar)
+		if err != nil {
+			respuestaError(w, err)
+			return
+		}
+		respuestaOK(w, map[string]any{"red": red, "mensaje": mensaje})
+	case metodo == http.MethodPost && ruta == "red/regla-https":
+		red, err := p.ops.AbrirPuertoHTTPS()
+		if err != nil {
+			respuestaError(w, err)
+			return
+		}
+		respuestaOK(w, map[string]any{"red": red})
 	case metodo == http.MethodGet && ruta == "doctor":
 		texto, err := p.ops.Doctor()
 		if err != nil {
@@ -397,7 +634,7 @@ func (p *Panel) api(w http.ResponseWriter, r *http.Request) {
 		respuestaOK(w, nil)
 	case metodo == http.MethodGet && ruta == "qr":
 		que := r.URL.Query().Get("que")
-		if que != "internet" && que != "local" {
+		if que != "internet" && que != "local" && que != "localSeguro" {
 			http.NotFound(w, r)
 			return
 		}

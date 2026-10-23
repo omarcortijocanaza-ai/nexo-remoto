@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,11 +15,27 @@ import (
 
 // falsas: registra lo que el panel pide sin tocar el sistema.
 type falsas struct {
-	llamadas []string
-	fallo    error
+	llamadas     []string
+	fallo        error
+	apariencia   Apariencia
+	dispositivos []DispositivoPanel
 }
 
-func (f *falsas) anotar(s string) { f.llamadas = append(f.llamadas, s) }
+func (f *falsas) anotar(s string)            { f.llamadas = append(f.llamadas, s) }
+func (f *falsas) LeerApariencia() Apariencia { return f.apariencia }
+func (f *falsas) GuardarApariencia(a Apariencia) (Apariencia, error) {
+	f.anotar("apariencia:" + a.Tema + "/" + a.Modo)
+	if f.fallo != nil {
+		return a, f.fallo
+	}
+	valida, err := validarApariencia(a) // como la implementación real: estricta al escribir
+	if err != nil {
+		return a, err
+	}
+	f.apariencia = valida
+	return valida, nil
+}
+func (f *falsas) LeerDispositivos() []DispositivoPanel { return f.dispositivos }
 func (f *falsas) Estado() EstadoPanel {
 	return EstadoPanel{Estado: "activo", TextoEstado: "NEXO · activo", Modo: "both", Enlaces: Enlaces{Internet: "https://x.trycloudflare.com/?token=abc", Local: "http://192.168.1.2:8765/?token=abc"}, Autoarranque: Autoarranque{Instalado: true, Activo: true}, Elevado: true, Ajustes: ajustesPorDefecto, Version: "1.0"}
 }
@@ -47,7 +64,34 @@ func (f *falsas) GuardarAviso(a Aviso, conservar bool) error {
 	f.anotar("aviso:" + a.Metodo)
 	return f.fallo
 }
-func (f *falsas) ProbarAviso() (string, error)  { return "Aviso de prueba enviado.", nil }
+func (f *falsas) ProbarAviso() (string, error) { return "Aviso de prueba enviado.", nil }
+func (f *falsas) LeerTurn() (TurnPanel, error) {
+	return TurnPanel{Proveedor: "cloudflare", CloudflareKeyID: "abc123", TieneAPIToken: true, ManualURLs: []string{}}, nil
+}
+func (f *falsas) GuardarTurn(t TurnEntrada) (TurnPanel, error) {
+	f.anotar("turn:" + t.Proveedor)
+	return TurnPanel{Proveedor: t.Proveedor, TieneAPIToken: t.Cloudflare.APIToken != "", ManualURLs: []string{}}, f.fallo
+}
+func (f *falsas) ProbarTurn() (string, error) {
+	f.anotar("turn-prueba")
+	return "TURN funcionando", f.fallo
+}
+func (f *falsas) Red() (RedPanel, error) {
+	return RedPanel{Comprobado: true, Perfiles: []PerfilRed{{Nombre: "Red 3", Interfaz: "Ethernet", Categoria: "Public"}}, TodasPublicas: true,
+		ReglasPublicas: []ReglaPublica{{Nombre: "Node.js JavaScript Runtime", Programa: "C:\\nodejs\\node.exe", Protocolo: "TCP"}}, PuertoHTTPS: 8443, Elevado: true}, nil
+}
+func (f *falsas) MarcarRedPrivada() (RedPanel, error) {
+	f.anotar("red-privada")
+	return RedPanel{Comprobado: true, Perfiles: []PerfilRed{{Categoria: "Private"}}, ReglasPublicas: []ReglaPublica{}}, f.fallo
+}
+func (f *falsas) CerrarReglasPublicas(forzar bool) (RedPanel, string, error) {
+	f.anotar(fmt.Sprintf("cerrar-publicas:%v", forzar))
+	return RedPanel{Comprobado: true, Perfiles: []PerfilRed{}, ReglasPublicas: []ReglaPublica{}}, "Listo: se cerraron 2 regla(s).", f.fallo
+}
+func (f *falsas) AbrirPuertoHTTPS() (RedPanel, error) {
+	f.anotar("regla-https")
+	return RedPanel{Comprobado: true, ReglaHTTPS: true, Perfiles: []PerfilRed{}, ReglasPublicas: []ReglaPublica{}}, f.fallo
+}
 func (f *falsas) Doctor() (string, error)       { return "todo bien", nil }
 func (f *falsas) Registro() string              { return "línea 1\nlínea 2" }
 func (f *falsas) AbrirRegistros() error         { f.anotar("abrir-registros"); return nil }
@@ -58,7 +102,7 @@ const claveDePrueba = "clave-de-prueba-0123456789"
 
 func servidorDePrueba(t *testing.T) (*Panel, *falsas, *httptest.Server) {
 	t.Helper()
-	f := &falsas{}
+	f := &falsas{apariencia: aparienciaPorDefecto, dispositivos: []DispositivoPanel{}}
 	p := nuevoPanel(f, claveDePrueba)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { p.Handler().ServeHTTP(w, r) }))
 	t.Cleanup(srv.Close)
@@ -339,5 +383,105 @@ func TestNombreDeTareaSeValida(t *testing.T) {
 	t.Setenv("NEXO_TASK_NAME", "x'; Remove-Item C:\\ -Recurse #")
 	if nombreTarea() != "NEXO" {
 		t.Error("un nombre con comillas debe ignorarse (inyección en el script)")
+	}
+}
+
+func TestPanelTurnNuncaDevuelveSecretosYPasaElCuerpo(t *testing.T) {
+	_, f, srv := servidorDePrueba(t)
+	leer := nuevaPeticion(t, srv, "GET", "/api/turn", "", true, nil)
+	cuerpo, _ := io.ReadAll(leer.Body)
+	leer.Body.Close()
+	if leer.StatusCode != 200 || !strings.Contains(string(cuerpo), "\"tieneApiToken\":true") || strings.Contains(string(cuerpo), "apiToken\":\"") {
+		t.Fatalf("GET /api/turn: %d %s", leer.StatusCode, cuerpo)
+	}
+
+	guardar := nuevaPeticion(t, srv, "POST", "/api/turn", `{"proveedor":"cloudflare","cloudflare":{"keyId":"abc123","apiToken":"secreto-que-no-vuelve"}}`, true, postJSON)
+	cuerpo, _ = io.ReadAll(guardar.Body)
+	guardar.Body.Close()
+	if guardar.StatusCode != 200 || strings.Contains(string(cuerpo), "secreto-que-no-vuelve") {
+		t.Fatalf("POST /api/turn no debe devolver el secreto: %d %s", guardar.StatusCode, cuerpo)
+	}
+	if len(f.llamadas) != 1 || f.llamadas[0] != "turn:cloudflare" {
+		t.Fatalf("llamadas: %v", f.llamadas)
+	}
+
+	f.fallo = errors.New("Escribe el «Key ID» de tu clave TURN de Cloudflare")
+	malo := nuevaPeticion(t, srv, "POST", "/api/turn", `{"proveedor":"cloudflare"}`, true, postJSON)
+	var resp map[string]any
+	_ = json.NewDecoder(malo.Body).Decode(&resp)
+	malo.Body.Close()
+	if resp["ok"] != false || !strings.Contains(resp["error"].(string), "Key ID") {
+		t.Fatalf("un fallo debe llegar como ok:false con el motivo: %v", resp)
+	}
+	f.fallo = nil
+
+	prueba := nuevaPeticion(t, srv, "POST", "/api/turn/prueba", "{}", true, postJSON)
+	resp = nil
+	_ = json.NewDecoder(prueba.Body).Decode(&resp)
+	prueba.Body.Close()
+	if resp["ok"] != true || resp["texto"] != "TURN funcionando" {
+		t.Fatalf("prueba: %v", resp)
+	}
+}
+
+func TestPanelRedRutas(t *testing.T) {
+	_, f, srv := servidorDePrueba(t)
+	var resp map[string]any
+	leer := nuevaPeticion(t, srv, "GET", "/api/red", "", true, nil)
+	_ = json.NewDecoder(leer.Body).Decode(&resp)
+	leer.Body.Close()
+	red, _ := resp["red"].(map[string]any)
+	if resp["ok"] != true || red["todasPublicas"] != true || len(red["reglasPublicas"].([]any)) != 1 {
+		t.Fatalf("GET /api/red: %v", resp)
+	}
+
+	for _, caso := range []struct{ ruta, cuerpo, llamada string }{
+		{"/api/red/privada", "{}", "red-privada"},
+		{"/api/red/cerrar-publicas", `{"forzar":true}`, "cerrar-publicas:true"},
+		{"/api/red/cerrar-publicas", "{}", "cerrar-publicas:false"},
+		{"/api/red/regla-https", "{}", "regla-https"},
+	} {
+		r := nuevaPeticion(t, srv, "POST", caso.ruta, caso.cuerpo, true, postJSON)
+		resp = nil
+		_ = json.NewDecoder(r.Body).Decode(&resp)
+		r.Body.Close()
+		if resp["ok"] != true {
+			t.Fatalf("%s: %v", caso.ruta, resp)
+		}
+		if ultima := f.llamadas[len(f.llamadas)-1]; ultima != caso.llamada {
+			t.Fatalf("%s: esperaba la llamada %q y fue %q", caso.ruta, caso.llamada, ultima)
+		}
+	}
+
+	// Las acciones que cambian el sistema no se aceptan sin la cabecera del panel.
+	sinCabecera := nuevaPeticion(t, srv, "POST", "/api/red/privada", "{}", true, map[string]string{"Content-Type": "application/json"})
+	sinCabecera.Body.Close()
+	if sinCabecera.StatusCode != http.StatusForbidden {
+		t.Fatalf("POST sin cabecera debía dar 403 y dio %d", sinCabecera.StatusCode)
+	}
+}
+
+func TestAjustesIncluyenElHTTPSDeLaLAN(t *testing.T) {
+	dir := t.TempDir()
+	ruta := filepath.Join(dir, ".nexo-settings.json")
+	if got := leerAjustes(ruta); got.HTTPSLan {
+		t.Fatalf("por defecto el HTTPS de la LAN debe estar apagado: %+v", got)
+	}
+	a := ajustesPorDefecto
+	a.HTTPSLan = true
+	valido, err := validarAjustes(a)
+	if err != nil || !valido.HTTPSLan {
+		t.Fatalf("validar: %+v %v", valido, err)
+	}
+	if err := guardarAjustes(ruta, valido); err != nil {
+		t.Fatal(err)
+	}
+	if got := leerAjustes(ruta); !got.HTTPSLan {
+		t.Fatalf("no se guardó httpsLan: %+v", got)
+	}
+	// Lo guardado por Go lo entiende lib/settings.js (misma clave).
+	datos, _ := os.ReadFile(ruta)
+	if !strings.Contains(string(datos), "\"httpsLan\": true") {
+		t.Fatalf("la clave del archivo debe ser httpsLan: %s", datos)
 	}
 }

@@ -11,7 +11,7 @@ const { NOMBRE_ARCHIVO, POR_DEFECTO, entornoDeAjustes, leerAjustes, normalizar }
 test('normalizar rellena lo ausente y descarta lo inválido', () => {
   assert.deepEqual(normalizar(null), POR_DEFECTO);
   assert.deepEqual(normalizar({ modo: 'raro', gpu: 'sí', micDispositivo: 42 }), POR_DEFECTO);
-  assert.deepEqual(normalizar({ modo: 'local', gpu: false, micDispositivo: '  Voicemeeter Input  ' }), { modo: 'local', gpu: false, micDispositivo: 'Voicemeeter Input' });
+  assert.deepEqual(normalizar({ modo: 'local', gpu: false, micDispositivo: '  Voicemeeter Input  ' }), { modo: 'local', gpu: false, micDispositivo: 'Voicemeeter Input', httpsLan: false });
   assert.equal(normalizar({ micDispositivo: 'x'.repeat(200) }).micDispositivo.length, 80);
   assert.equal(normalizar({ micDispositivo: '   ' }).micDispositivo, POR_DEFECTO.micDispositivo);
 });
@@ -23,7 +23,7 @@ test('leerAjustes tolera archivo ausente o roto', () => {
     fs.writeFileSync(path.join(dir, NOMBRE_ARCHIVO), '{"modo":');
     assert.deepEqual(leerAjustes(dir), POR_DEFECTO);
     fs.writeFileSync(path.join(dir, NOMBRE_ARCHIVO), JSON.stringify({ modo: 'remote', gpu: false }));
-    assert.deepEqual(leerAjustes(dir), { modo: 'remote', gpu: false, micDispositivo: 'CABLE Input' });
+    assert.deepEqual(leerAjustes(dir), { modo: 'remote', gpu: false, micDispositivo: 'CABLE Input', httpsLan: false });
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

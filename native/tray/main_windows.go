@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	stdlog "log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,22 +33,21 @@ type app struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	ops           *operaciones
-	panel         *Panel
-	panelAlInicio bool
-	itemPanel     *systray.MenuItem
-	estadoItem    *systray.MenuItem
-	itemRemoto    *systray.MenuItem
-	itemLocal     *systray.MenuItem
-	itemPar       *systray.MenuItem
-	itemLogs      *systray.MenuItem
-	itemReinit    *systray.MenuItem
-	itemSalir     *systray.MenuItem
-	iconos        map[Visual][]byte
-	ultimo        Visual
-	ultimoValid   bool
-	remotoOK      bool
-	remotoValid   bool
+	ops         *operaciones
+	panel       *Panel
+	itemPanel   *systray.MenuItem
+	estadoItem  *systray.MenuItem
+	itemRemoto  *systray.MenuItem
+	itemLocal   *systray.MenuItem
+	itemPar     *systray.MenuItem
+	itemLogs    *systray.MenuItem
+	itemReinit  *systray.MenuItem
+	itemSalir   *systray.MenuItem
+	iconos      map[Visual][]byte
+	ultimo      Visual
+	ultimoValid bool
+	remotoOK    bool
+	remotoValid bool
 
 	parMu sync.Mutex // un solo «generar código» a la vez
 }
@@ -105,13 +105,20 @@ func main() {
 		return
 	}
 	rutas := calcularRutas(filepath.Dir(exe), os.Getenv)
+	// Debe preceder incluso a tareaInstalada y al panel: todos los hijos heredan
+	// el runtime portable sin cambiar el PATH del usuario ni el del sistema.
+	if err := prepararRuntimeIncluido(rutas.RepoRoot, os.Getenv, os.Setenv); err != nil {
+		return
+	}
 	_ = os.MkdirAll(rutas.StateDir, 0o700)
 	_ = os.MkdirAll(rutas.LogsDir, 0o700)
 
 	// 1) ¿Ya hay una bandeja corriendo (quizá elevada)? Se le pide, a lo sumo, abrir el panel.
 	if info, ok := leerInfoPanel(rutas); ok && procesoVivo(info.Pid) {
 		if quierePanel {
-			_ = abrirVentanaPanel(rutas, urlDePanel(info))
+			if err := abrirVentanaPanel(rutas, urlDePanel(info)); err != nil {
+				mostrarMensaje("NEXO", "No se pudo abrir el panel.\n"+err.Error(), mbIconError)
+			}
 		}
 		return
 	}
@@ -124,7 +131,11 @@ func main() {
 		if cmd.Run() == nil {
 			if quierePanel {
 				if info, ok := esperarInfoPanel(rutas, 40*time.Second); ok {
-					_ = abrirVentanaPanel(rutas, urlDePanel(info))
+					if err := abrirVentanaPanel(rutas, urlDePanel(info)); err != nil {
+						mostrarMensaje("NEXO", "No se pudo abrir el panel.\n"+err.Error(), mbIconError)
+					}
+				} else {
+					mostrarMensaje("NEXO", "Windows ejecutó la tarea, pero NEXO no publicó su panel en 40 segundos. Consulta el registro:\n"+filepath.Join(rutas.LogsDir, "nexo-tray.log"), mbIconError)
 				}
 			}
 			return
@@ -147,6 +158,11 @@ func main() {
 
 	log, _ := abrirRegistro(rutas.LogsDir) // sin log se sigue igual (Registro nil es válido)
 	defer log.Cerrar()
+	if log != nil {
+		// La biblioteca de bandeja escribe en el logger estándar. Sin redirigirlo,
+		// un fallo de Shell_NotifyIcon desaparece en un ejecutable windowsgui.
+		stdlog.SetOutput(log)
+	}
 	defer func() {
 		// Una aplicación windowsgui que entra en pánico desaparece sin dejar rastro.
 		if r := recover(); r != nil {
@@ -165,13 +181,24 @@ func main() {
 		cancel:    cancel,
 		iconos:    map[Visual][]byte{},
 	}
-	a.panelAlInicio = quierePanel
+	// El icono es una comodidad, no un requisito para disponer del panel. Windows
+	// puede rechazarlo al iniciar sesión o cambiar a una sesión RDP de Hyper-V;
+	// systray entonces no llama onReady aunque su bucle siga ejecutándose.
+	a.log.Printf("inicializando panel y supervisor sin depender de la bandeja")
+	a.iniciarPanel()
+	a.lanzador.Iniciar()
+	a.vigilante.Iniciar()
+	if quierePanel {
+		go a.abrirPanel()
+	}
+	a.log.Printf("registrando icono de bandeja")
 	systray.Run(a.alIniciar, a.alSalir)
 	borrarInfoPanel(rutas)
 	log.Printf("nexo-tray cerrado")
 }
 
 func (a *app) alIniciar() {
+	a.log.Printf("Windows aceptó la bandeja")
 	for _, v := range []Visual{VisualDetenido, VisualConectando, VisualActivo} {
 		ico, err := generarICO(colorDe(v))
 		if err != nil {
@@ -182,7 +209,6 @@ func (a *app) alIniciar() {
 	}
 	a.aplicarVisual(VisualDetenido)
 
-	a.iniciarPanel()
 	systray.SetOnTapped(func() { go a.abrirPanel() })
 
 	a.estadoItem = systray.AddMenuItem(VisualDetenido.Texto(), "")
@@ -199,14 +225,8 @@ func (a *app) alIniciar() {
 	systray.AddSeparator()
 	a.itemSalir = systray.AddMenuItem("Salir", "")
 
-	a.lanzador.Iniciar()
-	a.vigilante.Iniciar()
-
 	go a.bucleEstado()
 	go a.bucleMenu()
-	if a.panelAlInicio {
-		go a.abrirPanel()
-	}
 }
 
 func (a *app) alSalir() {

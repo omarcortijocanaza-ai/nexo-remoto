@@ -157,6 +157,38 @@ Test-Seccion 'Firewall' {
     else { Add-Check 'sin reglas en perfil Público' 'OK' '' }
 }
 
+Test-Seccion 'Red y conexión' {
+    # Windows suele clasificar una Ethernet doméstica como «Pública»: las reglas «NEXO …» sólo valen
+    # en redes Privadas y la LAN sólo funciona gracias a reglas que Windows creó solo.
+    $perfiles = @(Get-NetConnectionProfile -ErrorAction SilentlyContinue)
+    if ($perfiles.Count) {
+        $resumen = ($perfiles | ForEach-Object { "$($_.InterfaceAlias): $($_.NetworkCategory)" }) -join ', '
+        $todasPublicas = -not ($perfiles | Where-Object { [string]$_.NetworkCategory -ne 'Public' })
+        if ($todasPublicas) { Add-Check 'categoría de la red' 'AVISO' "$resumen. Si es tu red de casa, márcala como Privada (panel → Conexión)" }
+        else { Add-Check 'categoría de la red' 'OK' $resumen }
+    }
+
+    # HTTPS de la LAN (O2): ajuste, certificado, regla del puerto y enlace publicado.
+    $ajustes = $null
+    try { $ajustes = Get-Content -LiteralPath (Join-Path $DirEstado '.nexo-settings.json') -Raw -Encoding utf8 -ErrorAction Stop | ConvertFrom-Json } catch {}
+    if ($ajustes -and $ajustes.httpsLan -eq $true) {
+        $regla = Get-NetFirewallRule -DisplayName 'NEXO HTTPS 8443 (node)' -ErrorAction SilentlyContinue
+        $certificado = Test-Path -LiteralPath (Join-Path $DirEstado '.nexo-tls.pfx')
+        $enlace = [bool]($estado -and $estado.localHttpsUrl)
+        $detalle = "certificado: $(if ($certificado) { 'sí' } else { 'aún no' }); puerto 8443 en el firewall: $(if ($regla) { 'sí' } else { 'NO' }); enlace activo: $(if ($enlace) { 'sí' } else { 'no' })"
+        Add-Check 'HTTPS en la red local' $(if ($regla -and ($enlace -or -not $estado)) { 'OK' } else { 'AVISO' }) $(if ($regla) { $detalle } else { "$detalle (panel → Conexión → abrir el puerto)" })
+    } else {
+        Add-Check 'HTTPS en la red local' 'OK' 'apagado (el micrófono del celular por Wi-Fi lo necesita: panel → Ajustes)'
+    }
+
+    # TURN (O1): opcional; sólo se informa de lo configurado.
+    $turn = $null
+    try { $turn = Get-Content -LiteralPath (Join-Path $DirEstado '.nexo-turn.json') -Raw -Encoding utf8 -ErrorAction Stop | ConvertFrom-Json } catch {}
+    $proveedor = if ($turn -and $turn.proveedor) { [string]$turn.proveedor } else { 'ninguno' }
+    if ($proveedor -eq 'ninguno') { Add-Check 'servidor TURN' 'OK' 'ninguno: sólo STUN (por datos móviles NEXO puede caer al respaldo JPEG; panel → Conexión)' }
+    else { Add-Check 'servidor TURN' 'OK' "$proveedor (comprueba con: nexo-control turn-test)" }
+}
+
 Test-Seccion 'Autoarranque' {
     $tarea = Get-ScheduledTask -TaskName 'NEXO' -ErrorAction SilentlyContinue
     if (-not $tarea) { Add-Check 'tarea programada NEXO' 'AVISO' 'no instalada (scripts\windows\install-autostart.ps1)'; return }

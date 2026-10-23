@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+<!-- Escritorio de muestra para el modo demostración (?demo=1). No es el de nadie: fondo abstracto, editor, navegador, barra de tareas y puntero. -->
+      <defs>
+        <linearGradient id="g-fondo" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1c2a4d"/><stop offset=".6" stop-color="#27567a"/><stop offset="1" stop-color="#3d8a8f"/></linearGradient>
+      </defs>
+      <rect width="1600" height="900" fill="url(#g-fondo)"/>
+      <circle cx="1280" cy="150" r="260" fill="#fff" opacity=".07"/><circle cx="260" cy="760" r="340" fill="#000" opacity=".12"/>
+      <!-- editor -->
+      <g>
+        <rect x="90" y="80" width="820" height="560" rx="12" fill="#1e2127"/>
+        <rect x="90" y="80" width="820" height="40" rx="12" fill="#2a2e36"/><rect x="90" y="108" width="820" height="12" fill="#2a2e36"/>
+        <circle cx="116" cy="100" r="6" fill="#ff5f57"/><circle cx="138" cy="100" r="6" fill="#febc2e"/><circle cx="160" cy="100" r="6" fill="#28c840"/>
+        <rect x="90" y="120" width="190" height="520" fill="#22252c"/>
+        <g fill="#6b7280"><rect x="112" y="146" width="120" height="10" rx="3"/><rect x="128" y="172" width="100" height="10" rx="3"/><rect x="128" y="198" width="140" height="10" rx="3"/><rect x="128" y="224" width="90" height="10" rx="3"/><rect x="112" y="250" width="110" height="10" rx="3"/></g>
+        <g><rect x="310" y="146" width="90" height="12" rx="3" fill="#c678dd"/><rect x="410" y="146" width="150" height="12" rx="3" fill="#61afef"/>
+          <rect x="330" y="176" width="200" height="12" rx="3" fill="#98c379"/><rect x="540" y="176" width="110" height="12" rx="3" fill="#abb2bf"/>
+          <rect x="330" y="206" width="130" height="12" rx="3" fill="#e5c07b"/><rect x="470" y="206" width="240" height="12" rx="3" fill="#abb2bf"/>
+          <rect x="350" y="236" width="170" height="12" rx="3" fill="#61afef"/><rect x="530" y="236" width="80" height="12" rx="3" fill="#d19a66"/>
+          <rect x="350" y="266" width="260" height="12" rx="3" fill="#abb2bf"/><rect x="330" y="296" width="60" height="12" rx="3" fill="#c678dd"/>
+          <rect x="310" y="326" width="40" height="12" rx="3" fill="#abb2bf"/><rect x="310" y="376" width="110" height="12" rx="3" fill="#c678dd"/><rect x="430" y="376" width="190" height="12" rx="3" fill="#61afef"/>
+          <rect x="330" y="406" width="230" height="12" rx="3" fill="#98c379"/><rect x="330" y="436" width="150" height="12" rx="3" fill="#abb2bf"/><rect x="330" y="466" width="300" height="12" rx="3" fill="#e5c07b"/></g>
+      </g>
+      <!-- navegador -->
+      <g>
+        <rect x="640" y="230" width="820" height="520" rx="12" fill="#f4f5f7"/>
+        <rect x="640" y="230" width="820" height="44" rx="12" fill="#dfe2e8"/><rect x="640" y="262" width="820" height="12" fill="#dfe2e8"/>
+        <rect x="664" y="242" width="150" height="26" rx="8" fill="#f4f5f7"/><rect x="700" y="284" width="560" height="24" rx="12" fill="#e9ecf1"/>
+        <rect x="670" y="330" width="360" height="190" rx="10" fill="#fff"/><rect x="1050" y="330" width="380" height="190" rx="10" fill="#fff"/>
+        <rect x="690" y="352" width="200" height="14" rx="4" fill="#cfd4dc"/><rect x="690" y="380" width="300" height="10" rx="4" fill="#e1e4ea"/><rect x="690" y="400" width="260" height="10" rx="4" fill="#e1e4ea"/>
+        <rect x="1070" y="352" width="160" height="14" rx="4" fill="#cfd4dc"/><rect x="1070" y="380" width="320" height="110" rx="8" fill="#dbe6f7"/>
+        <rect x="670" y="544" width="760" height="170" rx="10" fill="#fff"/><g fill="#e1e4ea"><rect x="690" y="566" width="500" height="10" rx="4"/><rect x="690" y="590" width="620" height="10" rx="4"/><rect x="690" y="614" width="420" height="10" rx="4"/></g>
+      </g>
+      <!-- barra de tareas -->
+      <rect y="846" width="1600" height="54" fill="#0f1218" opacity=".86"/>
+      <g fill="#cfd6e4" opacity=".92"><rect x="716" y="860" width="26" height="26" rx="6"/><rect x="760" y="860" width="26" height="26" rx="6" opacity=".7"/><rect x="804" y="860" width="26" height="26" rx="6" opacity=".7"/><rect x="848" y="860" width="26" height="26" rx="6"/><rect x="892" y="860" width="26" height="26" rx="6" opacity=".7"/></g>
+      <text x="1530" y="880" fill="#dfe6f3" font-size="18" font-family="system-ui, sans-serif" text-anchor="end">07:14</text>
+      <!-- puntero -->
+      <path d="M1010 500 1010 548 1022 537 1031 559 1043 554 1034 532 1052 531z" fill="#fff" stroke="#000" stroke-width="3" stroke-linejoin="round"/>
+    </svg>

@@ -1,0 +1,22 @@
+NEXO para Windows x64
+
+Requisitos: Windows 10 2004 o Windows 11 x64, sesión gráfica abierta,
+conexión a Internet durante esta instalación y permisos de administrador.
+Instala desde la cuenta de Windows que usará NEXO, con permisos de administrador.
+No uses las credenciales de una cuenta administradora diferente.
+
+No necesitas instalar Git, Go, Node ni PowerShell por separado.
+El instalador obtiene FFmpeg desde su distribuidor oficial Gyan, por HTTPS
+y con SHA-256 verificado. Si falla la conexión puedes repetir la instalación.
+
+Vídeo acelerado: requiere una NVIDIA compatible con NVENC y su controlador.
+Sin NVENC se configura el modo CPU, con menor rendimiento y consumo mayor.
+El micrófono virtual requiere instalar aparte VB-CABLE o un cable compatible:
+https://vb-audio.com/Cable/
+
+El inicio automático ocurre al iniciar sesión, no antes de entrar en Windows.
+No cambia suspensión, inicio de sesión automático ni contraseñas de Windows.
+Las reglas de red se limitan al perfil Privado; usa ese perfil sólo en tu red de confianza.
+
+El paquete no está firmado. No desactives Defender para instalarlo.
+Esta primera versión debe validarse en otra PC antes de distribuirse ampliamente.

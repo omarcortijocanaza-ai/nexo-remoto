@@ -1,0 +1,79 @@
+/* REY MUERTO · tu identidad (Letzus · Rex Mortis) sin el brillo de neón: verde casi negro, hueso y oro viejo.
+   Corona como marca, títulos en capitales romanas, lo importante entra por un «sello» de estado. */
+
+.m[data-t="reymuerto"] {
+  --f-t: "Cinzel", "Trajan Pro", Georgia, serif; --f-c: "Atkinson Hyperlegible", system-ui, sans-serif; --f-n: var(--f-c);
+  --r: 8px; --rg: 12px;
+}
+.m[data-t="reymuerto"][data-modo="oscuro"] {
+  --bg: #0a0f0e; --sup: #0f1816; --sup2: #172623; --bd: #23352f; --tx: #e9e4d2; --su: #8fa59c;
+  --ac: #5cc8a8; --ac-tx: #04130e; --oro: #c9a24b; --ok: #5cc8a8; --av: #c9a24b; --ml: #d6624b;
+  background: radial-gradient(900px 520px at 8% -12%, rgba(92, 200, 168, .09), transparent 62%), radial-gradient(700px 420px at 105% 110%, rgba(201, 162, 75, .06), transparent 60%), var(--bg);
+}
+.m[data-t="reymuerto"][data-modo="claro"] {
+  --bg: #e7e3d4; --sup: #f2efe3; --sup2: #dcd7c4; --bd: #c3bca4; --tx: #14201c; --su: #5b6a63;
+  --ac: #1d7a62; --ac-tx: #fff; --oro: #8a6a1c; --ok: #1d7a62; --av: #8a6a1c; --ml: #b4402c;
+}
+[data-t="reymuerto"] .mk { flex: none; }
+[data-t="reymuerto"] .btn { border-radius: 6px; border-color: color-mix(in srgb, var(--oro) 55%, var(--bd)); background: transparent; }
+[data-t="reymuerto"] .btn.pri { background: var(--ac); border-color: var(--ac); }
+[data-t="reymuerto"] .btn.mal { border-color: color-mix(in srgb, var(--ml) 60%, var(--bd)); }
+
+/* panel: barra de arriba con pestañas de texto y un sello grande */
+[data-t="reymuerto"].pnl { grid-template-columns: 1fr; grid-template-rows: 68px 1fr; }
+[data-t="reymuerto"].pnl .nav { flex-direction: row; align-items: center; gap: 30px; padding: 0 30px; border-right: 0; border-bottom: 1px solid color-mix(in srgb, var(--oro) 38%, var(--bd)); background: transparent; }
+[data-t="reymuerto"].pnl .marca { padding: 0; color: var(--oro); font-size: 22px; letter-spacing: .12em; }
+[data-t="reymuerto"].pnl .nav nav { flex-direction: row; gap: 4px; margin-left: 12px; }
+[data-t="reymuerto"].pnl .it { height: 68px; padding: 0 14px; border-radius: 0; background: transparent; font-weight: 700; position: relative; font-size: 14.5px; }
+[data-t="reymuerto"].pnl .it .i { display: none; }
+[data-t="reymuerto"].pnl .it.on { color: var(--tx); background: transparent; }
+[data-t="reymuerto"].pnl .it.on::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; background: var(--oro); }
+[data-t="reymuerto"].pnl .it .n { margin-left: 6px; background: transparent; color: var(--oro); border: 1px solid var(--oro); min-width: 18px; height: 18px; }
+[data-t="reymuerto"].pnl .nav-pie { margin: 0 0 0 auto; padding: 0; }
+[data-t="reymuerto"].pnl .cuerpo { padding: 24px 34px 22px; gap: 20px; }
+[data-t="reymuerto"] .cab { gap: 22px; }
+[data-t="reymuerto"] .est { gap: 20px; }
+[data-t="reymuerto"] .est .luz { width: 64px; height: 64px; background: transparent; border: 2px solid var(--ac); position: relative; box-shadow: 0 0 0 7px color-mix(in srgb, var(--ac) 10%, transparent), inset 0 0 18px color-mix(in srgb, var(--ac) 22%, transparent); }
+[data-t="reymuerto"] .est .luz::after { content: ""; position: absolute; inset: 20px; border-radius: 50%; background: var(--ac); }
+[data-t="reymuerto"] .est h1 { font-size: 32px; font-weight: 600; letter-spacing: .04em; }
+[data-t="reymuerto"] .est p { color: var(--su); }
+[data-t="reymuerto"] .conecta { border-color: color-mix(in srgb, var(--oro) 45%, var(--bd)); background: linear-gradient(135deg, color-mix(in srgb, var(--sup) 92%, var(--ac)), var(--sup) 60%); grid-template-columns: 216px 1fr; padding: 22px; }
+[data-t="reymuerto"] .qrbox { width: 216px; height: 216px; border-radius: 6px; background: #efe9d6; box-shadow: 0 0 0 1px var(--oro), 0 0 0 6px var(--sup), 0 0 0 7px color-mix(in srgb, var(--oro) 60%, transparent); }
+[data-t="reymuerto"] .pasos h2 { font-size: 22px; letter-spacing: .06em; font-weight: 600; }
+[data-t="reymuerto"] .pasos ol { color: var(--su); }
+[data-t="reymuerto"] .via { background: var(--sup2); border: 1px solid var(--bd); }
+[data-t="reymuerto"] .via button.on { background: var(--bg); color: var(--oro); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--oro) 50%, transparent); }
+[data-t="reymuerto"] .enlace code { color: var(--su); background: transparent; border-style: dashed; }
+[data-t="reymuerto"] .datos { gap: 0; }
+[data-t="reymuerto"] .dato { background: transparent; border: 0; border-left: 1px solid var(--bd); border-radius: 0; padding: 4px 18px; }
+[data-t="reymuerto"] .dato:first-child { border-left: 0; padding-left: 4px; }
+[data-t="reymuerto"] .dato > .i { color: var(--oro); }
+[data-t="reymuerto"] .dato small { text-transform: none; }
+[data-t="reymuerto"] .dato b { font-size: 17px; }
+
+/* celular */
+[data-t="reymuerto"] .acc-p .logo, [data-t="reymuerto"] .elegir .logo { color: var(--oro); letter-spacing: .12em; font-size: 22px; }
+[data-t="reymuerto"] .acc-p h2, [data-t="reymuerto"] .elegir h2 { font-size: 30px; font-weight: 600; letter-spacing: .03em; line-height: 1.12; }
+[data-t="reymuerto"] .cod span { background: transparent; border: 0; border-bottom: 2px solid var(--oro); border-radius: 0; height: 60px; color: var(--tx); font-family: var(--f-t); font-weight: 600; font-size: 26px; }
+[data-t="reymuerto"] .cod span.ac { border-bottom-color: var(--ac); box-shadow: none; background: color-mix(in srgb, var(--ac) 10%, transparent); }
+[data-t="reymuerto"] .elegir .dest { background: color-mix(in srgb, var(--sup) 90%, var(--ac)); border-color: color-mix(in srgb, var(--oro) 42%, var(--bd)); }
+[data-t="reymuerto"] .elegir .dest b { font-family: var(--f-t); font-size: 18px; letter-spacing: .05em; font-weight: 600; }
+[data-t="reymuerto"] .elegir .mini { border-color: var(--bd); }
+
+/* sesión: un chip discreto arriba y un «dock» de sólo iconos */
+[data-t="reymuerto"] .ses .hud > * { background: color-mix(in srgb, var(--bg) 82%, transparent); border-color: color-mix(in srgb, var(--oro) 40%, var(--bd)); }
+[data-t="reymuerto"] .ses .hud .met { color: var(--su); }
+[data-t="reymuerto"] .ses .bar { background: color-mix(in srgb, var(--bg) 92%, transparent); border-color: color-mix(in srgb, var(--oro) 55%, var(--bd)); border-radius: 99px; padding: 5px; gap: 2px; }
+[data-t="reymuerto"] .ses .t { width: 52px; height: 52px; border-radius: 99px; color: var(--su); }
+[data-t="reymuerto"] .ses .t span { display: none; }
+[data-t="reymuerto"] .ses .t.on { width: auto; padding: 0 18px 0 14px; flex-direction: row; gap: 8px; background: color-mix(in srgb, var(--ac) 16%, transparent); color: var(--ac); }
+[data-t="reymuerto"] .ses .t.on span { display: inline; }
+[data-t="reymuerto"] .ses .hoja { background: var(--bg); border-color: color-mix(in srgb, var(--oro) 45%, var(--bd)); }
+[data-t="reymuerto"] .ses .hoja h3 { font-weight: 600; letter-spacing: .06em; }
+[data-t="reymuerto"] .ses .rej button { background: var(--sup); border-color: var(--bd); }
+[data-t="reymuerto"] .ses .rej button .i { color: var(--oro); }
+[data-t="reymuerto"] .ses .calidad button.on { background: var(--bg); color: var(--oro); }
+[data-t="reymuerto"] .pcw .tbar { background: color-mix(in srgb, var(--bg) 94%, transparent); border-bottom-color: color-mix(in srgb, var(--oro) 40%, var(--bd)); }
+[data-t="reymuerto"] .pcw .tbar .cen button.on { background: transparent; color: var(--oro); box-shadow: inset 0 -2px 0 var(--oro); border-radius: 0; }
+[data-t="reymuerto"] .marca-m { color: var(--oro); }
+[data-t="reymuerto"] .marca-m span { font-family: var(--f-t); letter-spacing: .12em; font-size: 15px; }

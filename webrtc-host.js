@@ -7,7 +7,9 @@ const { RTCVideoSource, RTCAudioSource } = wrtc.nonstandard;
 function even(value) { return Math.max(2, Math.round(value / 2) * 2); }
 
 class WebRtcHost {
-  constructor({ getMonitor, getAudioTarget, spawnRawVideo, spawnSystemAudio, onRealtimeEvent, onLog = () => {} }) {
+  constructor({ getMonitor, getAudioTarget, spawnRawVideo, spawnSystemAudio, onRealtimeEvent, onLog = () => {}, obtenerIce = null }) {
+    // Lista de servidores ICE (STUN + TURN si hay) que da lib/ice.js; sin ella, el STUN de siempre.
+    this.obtenerIce = obtenerIce;
     this.getMonitor = getMonitor;
     this.getAudioTarget = getAudioTarget;
     this.spawnRawVideo = spawnRawVideo;
@@ -64,8 +66,9 @@ class WebRtcHost {
       this.maxHeight = requestedHeight;
       if (this.peers.size) this.ensureCaptures(true);
     }
+    const iceServers = this.obtenerIce ? await this.obtenerIce() : [{ urls: 'stun:stun.cloudflare.com:3478' }];
     const pc = new wrtc.RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }],
+      iceServers,
       bundlePolicy: 'max-bundle'
     });
     const peer = { pc, channels: new Set(), closed: false, background: false, gpuVideo: false, lastSeen: Date.now() };

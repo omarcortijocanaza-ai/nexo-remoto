@@ -1,0 +1,97 @@
+/* CABINA · instrumentos de cabina. Grafito cálido, ámbar de indicador, cifras en monoespaciada y
+ * etiquetas en condensada. Denso y pensado para leer el estado de un vistazo.
+ * Estructura (carril, columnas) sólo a partir de 761 px; en ventanas estrechas manda la barra inferior
+ * común y este tema sólo aporta color y tipografía. */
+
+@layer tema {
+
+[data-tema="cabina"] {
+  --f-t: "Barlow Condensed", "Arial Narrow", sans-serif; --f-c: "Barlow", system-ui, sans-serif; --f-n: "JetBrains Mono", ui-monospace, monospace;
+  --r: 2px; --rg: 3px; --qr: 240px;
+}
+[data-tema="cabina"][data-modo="oscuro"] {
+  --bg: #12110d; --sup: #1b1912; --sup2: #27231a; --bd: #3b362a; --tx: #efe8d6; --su: #a89f88;
+  --ac: #f2a93b; --ac-tx: #181002; --ok: #93d27b; --av: #f2a93b; --ml: #ec6a52; --lnk: #f2a93b;
+}
+[data-tema="cabina"][data-modo="claro"] {
+  --bg: #e5e1d4; --sup: #f2efe5; --sup2: #dad5c4; --bd: #b4ae9a; --tx: #1c1a14; --su: #5f5a49;
+  --ac: #a65d00; --ac-tx: #fff; --ok: #3a8527; --av: #a65d00; --ml: #b3341f; --lnk: #8a4d00;
+}
+
+[data-tema="cabina"] .mk-cabina { display: block; }
+[data-tema="cabina"] .marca { color: var(--ac); }
+[data-tema="cabina"] .luz { border-radius: 1px; width: 12px; height: 8px; box-shadow: 0 0 8px color-mix(in srgb, var(--est, transparent) 55%, transparent); }
+[data-tema="cabina"] .est .luz { width: 22px; height: 14px; }
+
+[data-tema="cabina"] .btn { font-family: var(--f-t); text-transform: uppercase; letter-spacing: .07em; font-size: 15px; font-weight: 700; background: transparent; }
+[data-tema="cabina"] .btn.pri { background: var(--ac); border-color: var(--ac); }
+[data-tema="cabina"] .btn.mal { border-color: var(--ml); }
+[data-tema="cabina"] .btn.mal-fuerte { background: var(--ml); color: #fff; }
+[data-tema="cabina"] .tarjeta { background: var(--sup); }
+[data-tema="cabina"] .sub, [data-tema="cabina"] .titulo { text-transform: uppercase; letter-spacing: .03em; }
+[data-tema="cabina"] .titulo { font-size: 34px; font-weight: 700; }
+[data-tema="cabina"] .sub { font-size: 21px; font-weight: 600; }
+[data-tema="cabina"] .sub.chico { font-size: 18px; }
+[data-tema="cabina"] .vista-cab { border-bottom: 1px solid var(--bd); padding-bottom: 14px; }
+[data-tema="cabina"] .interruptor { border-radius: 2px; }
+[data-tema="cabina"] .interruptor .perilla { border-radius: 1px; }
+[data-tema="cabina"] .interruptor[aria-checked="true"] .perilla { background: var(--ac-tx); }
+[data-tema="cabina"] .opcion:has(input:checked) { box-shadow: inset 3px 0 0 var(--ac); }
+[data-tema="cabina"] .campo label { font-family: var(--f-t); text-transform: uppercase; letter-spacing: .07em; font-size: 14px; }
+[data-tema="cabina"] .codigo { font-family: var(--f-n); color: var(--lnk); }
+[data-tema="cabina"] dialog { border-radius: 3px; }
+[data-tema="cabina"] .dlg-caja h2 { text-transform: uppercase; letter-spacing: .04em; font-size: 22px; }
+
+/* cabecera y conexión */
+[data-tema="cabina"] .cab { border-bottom: 1px solid var(--bd); padding-bottom: 16px; }
+[data-tema="cabina"] .est h1 { font-size: 40px; text-transform: uppercase; letter-spacing: .02em; font-weight: 700; }
+[data-tema="cabina"] .est p { font: 13px var(--f-n); color: var(--su); margin-top: 4px; }
+[data-tema="cabina"] .conecta::before, [data-tema="cabina"] .conecta::after { content: ""; position: absolute; width: 14px; height: 14px; border: 2px solid var(--ac); }
+[data-tema="cabina"] .conecta::before { left: -1px; top: -1px; border-right: 0; border-bottom: 0; }
+[data-tema="cabina"] .conecta::after { right: -1px; bottom: -1px; border-left: 0; border-top: 0; }
+[data-tema="cabina"] .qrbox { border-radius: 1px; padding: 12px; }
+[data-tema="cabina"] .pasos h2 { font-size: 26px; text-transform: uppercase; letter-spacing: .03em; }
+[data-tema="cabina"] .pasos ol { list-style: none; counter-reset: p; padding: 0; }
+[data-tema="cabina"] .pasos li { counter-increment: p; display: flex; gap: 10px; }
+[data-tema="cabina"] .pasos li::before { content: counter(p); width: 20px; height: 20px; display: grid; place-items: center; font: 700 12px var(--f-n); color: var(--lnk); border: 1px solid var(--lnk); flex: none; margin-top: 1px; }
+[data-tema="cabina"] .via { padding: 0; gap: 0; background: transparent; border: 1px solid var(--bd); }
+[data-tema="cabina"] .via button { font-family: var(--f-t); text-transform: uppercase; letter-spacing: .07em; border-radius: 0; min-height: 34px; border-right: 1px solid var(--bd); }
+[data-tema="cabina"] .via button:last-child { border-right: 0; }
+[data-tema="cabina"] .via button[aria-checked="true"] { background: var(--ac); color: var(--ac-tx); box-shadow: none; }
+[data-tema="cabina"] .enlace code { border-radius: 1px; color: var(--lnk); }
+
+/* los cuatro datos: tablero de lecturas con líneas finas entre celdas */
+[data-tema="cabina"] .datos { gap: 1px; background: var(--bd); border: 1px solid var(--bd); }
+[data-tema="cabina"] .dato { border: 0; border-radius: 0; background: var(--sup); flex-direction: column; gap: 6px; padding: 14px 16px; }
+[data-tema="cabina"] .dato > .i { display: none; }
+[data-tema="cabina"] .dato small { font: 600 12.5px var(--f-t); text-transform: uppercase; letter-spacing: .1em; }
+[data-tema="cabina"] .dato b { font: 600 18px var(--f-n); color: var(--tx); margin: 2px 0 4px; }
+[data-tema="cabina"] .dato em { font-size: 12px; }
+
+/* apariencias: tarjetas */
+[data-tema="cabina"] .ap-t b { text-transform: uppercase; letter-spacing: .05em; font-size: 18px; }
+.vp[data-tema="cabina"] { border-radius: 2px; }
+.vp[data-tema="cabina"] .vp-nav { width: 17%; }
+.vp[data-tema="cabina"] .vp-nav i { border-radius: 0; }
+.vp[data-tema="cabina"] .vp-luz { border-radius: 1px; width: 10px; height: 6px; }
+.vp[data-tema="cabina"] .vp-tit { text-transform: uppercase; letter-spacing: .04em; }
+
+@media (min-width: 761px) {
+  [data-tema="cabina"] .app { grid-template-columns: 96px minmax(0, 1fr); }
+  [data-tema="cabina"] .nav { padding: 18px 6px; background: var(--bg); }
+  [data-tema="cabina"] .marca { justify-content: center; padding: 2px 0 16px; }
+  [data-tema="cabina"] .nav .marca-txt { display: none; }
+  [data-tema="cabina"] .it {
+    flex-direction: column; justify-content: center; gap: 4px; min-height: 62px; padding: 0; text-align: center;
+    font-family: var(--f-t); font-size: 12px; letter-spacing: .05em; text-transform: uppercase;
+    border: 1px solid transparent; border-radius: 0;
+  }
+  [data-tema="cabina"] .it[aria-current="page"] { background: var(--sup); border-color: var(--bd); color: var(--ac); }
+  [data-tema="cabina"] .it[aria-current="page"]::before { content: ""; position: absolute; left: -7px; top: 10px; bottom: 10px; width: 3px; background: var(--ac); }
+  [data-tema="cabina"] .it .n { position: absolute; top: 4px; right: 6px; min-width: 16px; height: 16px; font: 700 11px var(--f-n); border-radius: 2px; padding: 0 3px; }
+  [data-tema="cabina"] .punto { position: absolute; top: 6px; right: 10px; margin: 0; }
+  [data-tema="cabina"] .nav-pie { justify-content: center; }
+  [data-tema="cabina"] .nav-pie span { display: none; }
+}
+
+}

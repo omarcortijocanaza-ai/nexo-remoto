@@ -43,14 +43,16 @@ install -d -o "$OWNER" -g "$OWNER_GROUP" -m 0755 "$OWNER_HOME/.local/share/appli
 # sesión reintentando en bucle y dejando ventanas anidadas sueltas.
 install -o root -g root -m 0644 "$SOURCE_DIR"/*.js /opt/nexo/
 install -o root -g root -m 0644 \
-  "$SOURCE_DIR"/index.html "$SOURCE_DIR"/pizarra.html \
+  "$SOURCE_DIR"/index.html "$SOURCE_DIR"/microfono.html "$SOURCE_DIR"/pizarra.html \
   "$SOURCE_DIR"/package.json "$SOURCE_DIR"/package-lock.json \
   "$SOURCE_DIR"/README.md "$SOURCE_DIR"/PLAN-SESION-INDEPENDIENTE.md \
   "$SOURCE_DIR"/PLAN-EXPERIENCIA-WINDOWS.md \
   "$SOURCE_DIR"/DIAGNOSTICO-TECLADO.md \
   "$SOURCE_DIR"/THIRD_PARTY_NOTICES.md /opt/nexo/
 
-for directory in assets bin lib node_modules platform windows-helper; do
+# El cliente rediseñado carga CSS y JavaScript desde ui/. Copiar sólo el HTML
+# dejaría la sesión independiente sin estilos ni selector de apariencia.
+for directory in assets bin lib node_modules platform ui windows-helper; do
   rm -rf "/opt/nexo/$directory"
   cp -a "$SOURCE_DIR/$directory" /opt/nexo/
   chown -R root:root "/opt/nexo/$directory"

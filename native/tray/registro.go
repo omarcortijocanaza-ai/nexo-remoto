@@ -19,6 +19,20 @@ type Registro struct {
 	f  *os.File
 }
 
+// Write permite conservar también los errores de bibliotecas que usan log estándar.
+// Comparte el bloqueo con Printf para no entremezclar líneas de distintos hilos.
+func (r *Registro) Write(datos []byte) (int, error) {
+	if r == nil {
+		return len(datos), nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.f == nil {
+		return len(datos), nil
+	}
+	return r.f.Write(datos)
+}
+
 // abrirRegistro abre (o crea) nexo-tray.log. Si ya pasa de 1 MiB lo renombra a
 // nexo-tray.log.1 (descartando el anterior) para que no crezca sin límite.
 func abrirRegistro(dir string) (*Registro, error) {

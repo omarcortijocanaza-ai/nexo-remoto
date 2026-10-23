@@ -10,6 +10,15 @@ Esta guía es la del host **Windows**. El host Linux (Arch + Hyprland) se descri
 
 ## Qué hace y en qué se diferencia de Linux
 
+Para instalar en **otra PC**, usa `dist/NEXO-Setup-1.0.4-x64.exe`: Windows x64,
+Internet durante la instalación y una cuenta con permisos propios de administrador.
+No necesita Git, Go, Node ni PowerShell instalados aparte. Al terminar abre NEXO y
+configura en **Ajustes** tu usuario y contraseña de NEXO (no son los de Windows).
+Puedes elegir el inicio automático al iniciar sesión y cambiarlo desde el panel.
+VB-CABLE para el micrófono virtual se instala aparte. La entrega todavía requiere
+aceptación en una segunda PC limpia; las comprobaciones locales no sustituyen eso.
+Para regenerarlo: [instrucciones del empaquetado](installer/COMPILAR.md).
+
 | | Windows | Linux |
 |---|---|---|
 | Vídeo | `ffmpeg` `ddagrab` → NVENC H.264 → puente Pion (compartido entre clientes); respaldo WebRTC por CPU y respaldo JPEG | `wf-recorder` → NVENC → GStreamer → puente Pion |
@@ -77,6 +86,39 @@ Esta guía es la del host **Windows**. El host Linux (Arch + Hyprland) se descri
    Input» (salida) y «CABLE Output» (entrada); tu salida por defecto sigue siendo tus parlantes.
 8. Comprueba: `nexo-control doctor` (abre una consola nueva para que el PATH se actualice).
 
+## Actualizar esta instalación después de cambiar el código
+
+1. En el panel, **Ajustes → Salir de NEXO**, o clic derecho en el icono junto al reloj → **Salir**.
+   El botón **Detener** deja la bandeja abierta: para recompilar hace falta **Salir**.
+2. Abre PowerShell 7 y ejecuta:
+
+   ```powershell
+   cd D:\nexo-remoto
+   pwsh -NoProfile -File .\scripts\windows\build.ps1
+   ```
+
+   Espera el mensaje **«Compilación completada correctamente»**. Si avisa que NEXO sigue abierto,
+   termina de cerrarlo desde la bandeja y repite. No borres los ejecutables ni la carpeta de estado.
+3. Busca **NEXO** en Inicio, o ejecuta:
+
+   ```powershell
+   .\bin\win\nexo-tray.exe --panel
+   ```
+
+   El acceso vuelve a usar la tarea instalada para conservar los permisos de administrador.
+4. Recarga la página del celular para recibir los nuevos estilos y controles.
+
+No hace falta reinstalar el autoarranque tras cada compilación: sigue apuntando al mismo ejecutable.
+La contraseña, los dispositivos emparejados, el token y los ajustes permanecen en `%LOCALAPPDATA%\NEXO\state`.
+Si nunca creaste el acceso directo del menú Inicio, puedes usar el comando del paso 3; el instalador
+también puede crearlo, pero repetirlo vuelve a activar el autoarranque.
+
+Para comprobar una compilación mientras NEXO sigue abierto, sin reemplazar la instalación:
+
+```powershell
+pwsh -NoProfile -File .\scripts\windows\build.ps1 -OutputDir "$env:TEMP\nexo-build-prueba"
+```
+
 ## El panel de NEXO (la aplicación)
 
 Para no depender de comandos hay un **panel de control**: una ventana propia de NEXO.
@@ -88,9 +130,9 @@ puedes anclarlo).
 |---|---|
 | **Inicio** | Estado grande («NEXO · activo»), botones **Iniciar / Detener / Reiniciar**, y los dos enlaces para el celular con **Copiar**, **Mostrar** y **código QR** (apunta la cámara del celular al QR). |
 | **Ajustes** | Interruptor **«Iniciar NEXO al encender la PC»** (activa o desactiva el autoarranque sin tocar nada más), de dónde se usa (**red local e Internet / sólo local / sólo Internet**), **vídeo con la tarjeta gráfica** sí/no, y el nombre del cable virtual del micrófono. Los cambios se aplican al reiniciar NEXO; el panel avisa y ofrece «Reiniciar ahora». |
-| **Emparejar** | **Generar código** de un solo uso (5, 10 o 30 minutos) para añadir un dispositivo sin compartir el enlace. |
-| **Aviso** | Que NEXO te mande el enlace nuevo al celular cuando arranque (ntfy o Telegram), con botón de prueba. |
-| **Seguridad** | Cambiar la contraseña de «Mi PC» y **rotar el enlace** (los enlaces compartidos antes dejan de valer). |
+| **Dispositivos** | Lista de dispositivos, código de emparejamiento, aviso del enlace por ntfy/Telegram y cambiar el enlace compartido. |
+| **Conexión** | Red de casa, firewall, HTTPS local y TURN para conexiones difíciles. |
+| **Apariencia** | Cabina, Nativa, Rey Muerto, Cianotipo y Bloque; claro, oscuro o automático. Puedes permitir que cada dispositivo elija. |
 | **Diagnóstico** | Ejecuta el diagnóstico completo y muestra el registro reciente (sin el token). |
 
 Notas:
@@ -104,9 +146,48 @@ Notas:
 - **Tras actualizar NEXO**: «Salir de NEXO» en el panel, `pwsh -File scripts\windows\build.ps1`,
   `pwsh -File scripts\windows\install-autostart.ps1` (crea el acceso directo) y abrir «NEXO» del menú Inicio.
 
+## Conexión: red de casa, HTTPS y TURN
+
+Todo esto está en el panel, sección **Conexión** (y en **Ajustes** para el HTTPS). Las acciones que cambian
+Windows (red, firewall) las pide una persona con un botón y exigen que NEXO esté abierto como administrador.
+
+**Tu red y el firewall.** Las reglas «NEXO …» sólo valen en redes **Privadas**, pero Windows suele marcar una
+Ethernet doméstica como «Pública». Mientras sea así, el celular entra por el Wi-Fi gracias a reglas que Windows
+creó solo al preguntar la primera vez (para `node.exe` y `nexo-gpu-webrtc.exe`). El orden correcto:
+
+1. **Marcar mi red como Privada** (si es tu red de casa).
+2. **Cerrar reglas públicas**: quita esas reglas (si una también valía en Privado, sólo pierde el Público). El panel se
+   niega a hacerlo mientras tu red siga siendo Pública, porque cortaría el acceso por Wi-Fi; hay un botón «de todos modos»
+   para quien sólo use el enlace de Internet.
+
+**HTTPS en la red de casa** (Ajustes → «Entrar por HTTPS…»). Por Wi-Fi el navegador del celular trata `http://192.168.x.x`
+como página no segura y bloquea el **micrófono** y el portapapeles. Con el interruptor encendido NEXO crea un certificado
+propio (`New-SelfSignedCertificate`, 1 año, se renueva solo y se rehace si cambia la IP de la PC), escucha en el puerto
+**8443** y publica un segundo enlace con candado. La primera vez el navegador avisa «conexión no privada»: es normal (el
+certificado lo firmó esta PC); acéptalo. El HTTP de siempre sigue funcionando. El panel abre el puerto 8443 en el firewall
+(sólo redes Privadas). Archivos en la carpeta de estado: `.nexo-tls.pfx`, `.nexo-tls.json` (contraseña aleatoria) y
+`nexo-lan.cer` (público). *Sin probar:* que Chrome Android permita `getUserMedia` tras aceptar el aviso (hay que verlo con un celular).
+
+**TURN para Internet** (Conexión → «Internet en redes difíciles»). Esta PC está tras CGNAT y el celular por datos móviles casi
+siempre también: sin un servidor TURN, WebRTC a veces no encuentra camino y NEXO cae al respaldo JPEG. Con un TURN el vídeo
+se retransmite. Dos formas:
+
+- **Cloudflare Realtime TURN**: creas una clave TURN en tu cuenta de Cloudflare y pegas el *Key ID* y el *API Token*; NEXO pide
+  credenciales de 24 h y las renueva solo. Según la documentación de Cloudflare: 1 000 GB gratis y luego 0,05 USD/GB.
+- **Otro servidor** (coturn propio u otro proveedor): direcciones `turn:`/`turns:`, usuario y contraseña.
+
+«Probar» abre un par de prueba y comprueba que el servidor ofrece una ruta de retransmisión (`relay`); también:
+`nexo-control turn-test`. Los secretos se guardan sólo en `.nexo-turn.json` (carpeta privada) y no se muestran de vuelta.
+El cambio se aplica en la siguiente conexión, sin reiniciar. Hace falta el puente nuevo: ejecuta `build.ps1` tras actualizar.
+
+**Vídeo en 720p/900p.** El reescalado ahora sube el fotograma a CUDA y lo escala con `scale_cuda`
+(≈ 30 % de un núcleo frente a 54–95 % del reescalado por CPU, y con mejor calidad medida). FFmpeg 9.0 no puede mapear D3D11 a
+CUDA, así que el fotograma sigue pasando por memoria; a 1080p todo el camino sigue en la GPU.
+
 ## Uso diario
 
-NEXO arranca solo al iniciar sesión y deja un **icono en la bandeja** (si no lo ves,
+Si activaste el inicio automático, NEXO arranca solo al iniciar sesión; si no, ábrelo con «NEXO» del menú Inicio (arranca la
+bandeja y con ella NEXO). Deja un **icono en la bandeja** (si no lo ves,
 está tras la flecha ^). Todo lo del panel también se puede hacer desde ahí. Menú del icono:
 
 - **Abrir panel de NEXO** (o un clic sobre el icono).

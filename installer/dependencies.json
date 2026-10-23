@@ -1,0 +1,28 @@
+{
+  "node": {
+    "version": "24.15.0",
+    "url": "https://nodejs.org/dist/v24.15.0/node-v24.15.0-win-x64.zip",
+    "sha256": "CC5149EABD53779CE1E7BDC5401643622D0C7E6800ADE18928A767E940BB0E62"
+  },
+  "pwsh": {
+    "version": "7.6.7",
+    "url": "https://github.com/PowerShell/PowerShell/releases/download/v7.6.7/PowerShell-7.6.7-win-x64.zip",
+    "sha256": "D2F952EBDBF24386CB8923553AA58E41A846DB35A6155EA04C58142A4B16DBB7"
+  },
+  "ffmpeg": {
+    "version": "9.0.2",
+    "url": "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-9.0.2-essentials_build.zip",
+    "sha256": "60F467265B1E312373DBCD92200C2618A74850F98D3D078E94296BB3FA2047BA",
+    "binarySha256": "3256173F3F8BFFD7DF12227C68ADF68025EDB1832273A9530688A7BB1ED8EDEC"
+  },
+  "inno": {
+    "version": "6.7.3",
+    "url": "https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe",
+    "sha256": "9C73C3BAE7ED48D44112A0F48E66742C00090BDB5BEF71D9D3C056C66E97B732"
+  },
+  "cloudflared": {
+    "version": "2026.7.1",
+    "url": "https://github.com/cloudflare/cloudflared/releases/download/2026.7.1/cloudflared-windows-amd64.exe",
+    "sha256": "CCB0756DE288D3C2C076D19764CA53E0849A10F2DD9C23F8656AC42BDEB45001"
+  }
+}

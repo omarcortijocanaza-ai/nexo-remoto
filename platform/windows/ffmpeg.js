@@ -14,6 +14,11 @@ const MAX_JPEG_BUFFER_BYTES = 16 * 1024 * 1024;
 
 const GPU_CHAINS = ['d3d11-native', 'd3d11-scale', 'cuda-scale', 'cpu-scale', 'gdigrab'];
 
+// Revisión de las cadenas de escalado. Se guarda junto a la cadena recordada: si cambia el
+// significado de una cadena (p. ej. `cuda-scale` dejó de ser un hwmap que no funciona),
+// lo recordado con la revisión anterior se descarta y se vuelve a sondear una vez.
+const CADENAS_REV = 2;
+
 let cachedFfmpegPath = null;
 let cachedFfmpegVersion = null;
 let cachedFilters = null;
@@ -79,7 +84,9 @@ function getAvailableFilters(ffmpegBin = findFfmpeg()) {
   const text = (res.stdout || '') + '\n' + (res.stderr || '');
   cachedFilters = {
     scale_d3d11: /\bscale_d3d11\b/.test(text),
-    scale_cuda: /\bscale_cuda\b/.test(text) && /\bhwmap\b/.test(text)
+    // `cuda-scale` no deriva CUDA desde D3D11 (FFmpeg no lo implementa): baja el fotograma,
+    // lo sube con hwupload_cuda y escala en la GPU. Necesita las dos piezas.
+    scale_cuda: /\bscale_cuda\b/.test(text) && /\bhwupload_cuda\b/.test(text)
   };
   return cachedFilters;
 }
@@ -172,9 +179,14 @@ function gpuStreamArgs({
       ];
       break;
     case 'cuda-scale':
+      // Medido en la RTX 3060 Ti con FFmpeg 9.0 (720p y 900p a 60 FPS): ≈ 30 % de un núcleo
+      // frente a 54–95 % de `cpu-scale`, y mejor calidad (SSIM 0,9986 contra 0,9972 de swscale
+      // bilinear). Se deja el formato en bgra a propósito: pedir `format=nv12` a scale_cuda
+      // falla (`cuModuleGetFunction … NOT_FOUND`) y NVENC convierte el color en la GPU.
       inputArgs = [
         '-f', 'lavfi',
-        '-i', `ddagrab=output_idx=${outIdx}:framerate=${f}:draw_mouse=1,hwmap=derive_device=cuda,scale_cuda=${w}:${h}:format=nv12`
+        '-i', `ddagrab=output_idx=${outIdx}:framerate=${f}:draw_mouse=1,hwdownload,format=bgra`,
+        '-vf', `hwupload_cuda,scale_cuda=${w}:${h}`
       ];
       break;
     case 'cpu-scale':
@@ -296,6 +308,18 @@ async function probeSingleChain({
   }
 }
 
+// Cadena guardada que sigue valiendo, o null si hay que sondear. Pura para poder probarla.
+// Vale sólo con la misma versión de ffmpeg y la misma revisión de cadenas.
+function cadenaRecordada({ saved, ffmpegVersion, candidates, isNativeRes }) {
+  if (!saved || saved.ffmpegVersion !== ffmpegVersion || saved.cadenasRev !== CADENAS_REV) return null;
+  if (isNativeRes) {
+    return typeof saved.chain === 'string' && candidates.includes(saved.chain) ? saved.chain : null;
+  }
+  if (typeof saved.scaleChain === 'string' && candidates.includes(saved.scaleChain)) return saved.scaleChain;
+  if (typeof saved.chain === 'string' && saved.chain !== 'd3d11-native' && candidates.includes(saved.chain)) return saved.chain;
+  return null;
+}
+
 async function selectAndProbeGpuChain({
   stateDir,
   ffmpegBin = findFfmpeg(),
@@ -317,19 +341,8 @@ async function selectAndProbeGpuChain({
 
   const isNativeRes = (Number(monitor?.width) || 1920) === width && (Number(monitor?.height) || 1080) === height;
   const saved = readJsonSafe(pipelineStatePath, null);
-  if (saved && saved.ffmpegVersion === ffmpegVersion) {
-    if (isNativeRes && typeof saved.chain === 'string' && candidates.includes(saved.chain)) {
-      return { chain: saved.chain, cached: true, ffmpegVersion };
-    }
-    if (!isNativeRes) {
-      if (typeof saved.scaleChain === 'string' && candidates.includes(saved.scaleChain)) {
-        return { chain: saved.scaleChain, cached: true, ffmpegVersion };
-      }
-      if (typeof saved.chain === 'string' && saved.chain !== 'd3d11-native' && candidates.includes(saved.chain)) {
-        return { chain: saved.chain, cached: true, ffmpegVersion };
-      }
-    }
-  }
+  const recordada = cadenaRecordada({ saved, ffmpegVersion, candidates, isNativeRes });
+  if (recordada) return { chain: recordada, cached: true, ffmpegVersion };
 
   for (const chain of candidates) {
     log(`[GPU/Sondeo] Probando cadena ${chain} (${width}x${height}@${fps}) durante ${durationMs} ms...`);
@@ -347,15 +360,18 @@ async function selectAndProbeGpuChain({
       durationMs
     });
     if (res.ok) {
+      // Con otra revisión de cadenas lo recordado ya no vale: no se arrastra `saved`.
+      const vigente = saved && saved.cadenasRev === CADENAS_REV ? saved : null;
       const nextState = {
         ffmpegVersion,
-        chain: isNativeRes ? chain : (saved?.chain || chain),
+        cadenasRev: CADENAS_REV,
+        chain: isNativeRes ? chain : (vigente?.chain || chain),
         probedAt: new Date().toISOString()
       };
       if (!isNativeRes) {
         nextState.scaleChain = chain;
-      } else if (saved?.scaleChain) {
-        nextState.scaleChain = saved.scaleChain;
+      } else if (vigente?.scaleChain) {
+        nextState.scaleChain = vigente.scaleChain;
       }
       atomicWriteJson(pipelineStatePath, nextState);
       log(`[GPU/Sondeo] Cadena seleccionada: ${chain} (+${res.packetsDelta} paquetes RTP)`);
@@ -609,6 +625,8 @@ module.exports = {
   gpuStreamArgs,
   rawVideoArgs,
   candidateChainsForProfile,
+  CADENAS_REV,
+  cadenaRecordada,
   selectAndProbeGpuChain,
   invalidateGpuChainCache,
   jpegStreamArgs,

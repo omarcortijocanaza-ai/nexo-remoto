@@ -1,0 +1,102 @@
+/* REY MUERTO · Viego, el Rey Arruinado (fan art propio de aficionado; Viego y League of Legends son marcas de Riot Games).
+   Violeta casi negro, plata, cadenas espectrales azules, espada carmesí y Niebla Negra. Sobrio, con carácter: sin neón ni degradados brillantes.
+   Corona de púas como marca, busto en pixel art en el portal, fondo difuminado de la imagen del dueño y una cadena como separador. */
+
+[data-tema="reymuerto"] {
+  --f-t: "Cinzel", "Trajan Pro", Georgia, serif; --f-c: "Atkinson Hyperlegible", system-ui, sans-serif; --f-n: var(--f-c);
+  --r: 8px; --rg: 12px; --foco: var(--esp);
+}
+[data-tema="reymuerto"][data-modo="oscuro"] {
+  --bg: #0b0a14; --sup: #141223; --sup2: #1d1a31; --bd: #2c2846; --tx: #ebe8f5; --su: #9d99b8;
+  --ac: #e0354f; --ac-tx: #ffffff; --ac-fill: #c92b45; --esp: #8fd3ff; --ok: #5fd3b0; --av: #e3b45a; --ml: #ff6b7d;
+  --stage: #07060d; --velo: rgba(5, 4, 12, .64); --hud: color-mix(in srgb, #0b0a14 80%, transparent);
+}
+[data-tema="reymuerto"][data-modo="claro"] {
+  --bg: #ebe8f2; --sup: #f6f4fb; --sup2: #dedaec; --bd: #c6c0da; --tx: #1a1626; --su: #5f5a78;
+  --ac: #b8213b; --ac-tx: #ffffff; --ac-fill: #b8213b; --esp: #2a78b8; --ok: #1f8f74; --av: #9a6d12; --ml: #c2263d;
+  --stage: #0e0c18; --velo: rgba(26, 22, 38, .46); --hud: color-mix(in srgb, #f6f4fb 88%, transparent);
+}
+html[data-tema="reymuerto"] { background: var(--bg); }
+
+/* ---------- marca, firma y arte ---------- */
+[data-tema="reymuerto"] .mk { width: 34px; height: 12px; background: url(/assets/viego/corona-pixel.svg) center / contain no-repeat; image-rendering: pixelated; }
+[data-tema="reymuerto"] .mk-txt { font-family: var(--f-t); letter-spacing: .14em; font-size: 20px; font-weight: 600; }
+[data-tema="reymuerto"] .portal-marca .mk { width: 42px; height: 15px; }
+[data-tema="reymuerto"] .portal-marca .firma { display: block; font-family: var(--f-t); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--su); }
+[data-tema="reymuerto"] .firma-pie { display: block; text-align: center; font: 600 11px var(--f-t); letter-spacing: .2em; text-transform: uppercase; color: var(--su); }
+[data-tema="reymuerto"] .rey {
+  display: block; width: 128px; height: 144px; flex: none; align-self: center; margin: -4px 0 -2px;
+  background: url(/assets/viego/rey-pixel.svg) center / contain no-repeat; image-rendering: pixelated;
+}
+@media (max-height: 640px) { [data-tema="reymuerto"] .rey { display: none; } }
+[data-tema="reymuerto"] hr.cadena { height: 12px; background: url(/assets/viego/cadena-pixel.svg) repeat-x center / auto 12px; image-rendering: pixelated; opacity: .85; }
+[data-tema="reymuerto"][data-modo="claro"] hr.cadena { filter: saturate(.7) brightness(.78); }
+
+/* ---------- botones ---------- */
+[data-tema="reymuerto"] .btn { border-radius: 6px; background: var(--sup2); border-color: color-mix(in srgb, var(--esp) 30%, var(--bd)); }
+[data-tema="reymuerto"] .btn.pri { background: var(--ac-fill); border-color: var(--ac-fill); color: var(--ac-tx); }
+[data-tema="reymuerto"] .btn.txt { background: transparent; border-color: transparent; color: var(--esp); }
+
+/* ---------- portal: niebla de Viego difuminada, código con subrayado ---------- */
+[data-tema="reymuerto"] #session-gate::before {
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 25%, transparent) 0%, var(--bg) 96%), url(/assets/viego/fondo-niebla.webp) center top / cover no-repeat;
+  opacity: .6;
+}
+[data-tema="reymuerto"][data-modo="claro"] #session-gate::before { opacity: .32; }
+[data-tema="reymuerto"] .portal-marca { padding-bottom: 14px; border-bottom: 0; position: relative; }
+[data-tema="reymuerto"] .portal-marca::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 12px; background: url(/assets/viego/cadena-pixel.svg) repeat-x left center / auto 12px; image-rendering: pixelated; opacity: .75; }
+[data-tema="reymuerto"] .portal-vista h1 { font-weight: 600; letter-spacing: .05em; font-size: 28px; }
+[data-tema="reymuerto"] .casillas i { background: transparent; border: 0; border-bottom: 2px solid color-mix(in srgb, var(--esp) 40%, var(--bd)); border-radius: 0; height: 60px; font-family: var(--f-t); font-size: 26px; }
+[data-tema="reymuerto"] .casillas i.act { border-bottom-color: var(--esp); background: color-mix(in srgb, var(--esp) 10%, transparent); box-shadow: none; }
+[data-tema="reymuerto"] .session-choice { background: color-mix(in srgb, var(--sup) 88%, var(--esp)); border-color: color-mix(in srgb, var(--esp) 26%, var(--bd)); }
+[data-tema="reymuerto"] .session-choice > .i { color: var(--esp); }
+[data-tema="reymuerto"] .session-choice strong { font-family: var(--f-t); font-weight: 600; letter-spacing: .05em; font-size: 18px; }
+[data-tema="reymuerto"] .session-choice:not(:disabled):hover { border-color: var(--esp); }
+[data-tema="reymuerto"] .session-choice .mini { border-color: var(--bd); }
+[data-tema="reymuerto"] #original-login input { background: color-mix(in srgb, var(--bg) 70%, transparent); }
+@media (min-width: 700px) {
+  [data-tema="reymuerto"] .gate-card { background: color-mix(in srgb, var(--sup) 84%, transparent); border-color: color-mix(in srgb, var(--esp) 24%, var(--bd)); backdrop-filter: blur(14px); box-shadow: 0 24px 80px rgba(0, 0, 0, .45); }
+  [data-tema="reymuerto"] .session-choice, [data-tema="reymuerto"] .casillas i { background-color: transparent; }
+  [data-tema="reymuerto"] .session-choice { background: color-mix(in srgb, var(--sup2) 70%, transparent); }
+}
+
+/* ---------- sesión: chips discretos arriba y un «dock» de iconos abajo ---------- */
+[data-tema="reymuerto"] #stage { background: #07060d url(/assets/viego/fondo-niebla.webp) center / cover no-repeat; }
+[data-tema="reymuerto"] .pill, [data-tema="reymuerto"] .chip { border-color: color-mix(in srgb, var(--esp) 30%, var(--bd)); }
+[data-tema="reymuerto"] .pill .est { font-family: var(--f-t); letter-spacing: .06em; font-weight: 600; }
+[data-tema="reymuerto"] .pill.bad .luz { box-shadow: 0 0 8px var(--ml); }
+[data-tema="reymuerto"] .pill.ok .luz { box-shadow: 0 0 8px color-mix(in srgb, var(--ok) 70%, transparent); }
+[data-tema="reymuerto"] .chip .i { color: var(--esp); }
+[data-tema="reymuerto"] .tools { left: 50%; right: auto; transform: translateX(-50%); max-width: calc(100vw - 16px); border-radius: 99px; padding: 5px; gap: 2px; border-color: color-mix(in srgb, var(--esp) 32%, var(--bd)); }
+[data-tema="reymuerto"] .tools > button { flex: none; width: 54px; min-width: 0; height: 54px; border-radius: 99px; padding: 0; }
+[data-tema="reymuerto"] .tools > button span { display: none; }
+[data-tema="reymuerto"] .tools > button.on { width: auto; padding: 0 17px 0 14px; flex-direction: row; gap: 8px; background: color-mix(in srgb, var(--esp) 15%, transparent); color: var(--esp); }
+[data-tema="reymuerto"] .tools > button.on span { display: inline; }
+[data-tema="reymuerto"] #mic.mudo.on { color: var(--ml); background: color-mix(in srgb, var(--ml) 14%, transparent); }
+[data-tema="reymuerto"] #mic-nivel { left: 14px; right: 14px; background: var(--esp); }
+[data-tema="reymuerto"] #mic.on #mic-nivel { bottom: 5px; }
+@media (max-width: 380px) { [data-tema="reymuerto"] .tools > button { width: 48px; height: 48px; } }
+/* PC: barra de arriba con pestañas de texto y una cadena de borde */
+html[data-tema="reymuerto"] body.computer-mode .top { border-bottom: 0; position: fixed; }
+html[data-tema="reymuerto"] body.computer-mode .top::after { content: ""; position: absolute; left: 0; right: 0; bottom: -6px; height: 6px; background: url(/assets/viego/cadena-pixel.svg) repeat-x left top / auto 6px; image-rendering: pixelated; opacity: .8; pointer-events: none; }
+html[data-tema="reymuerto"] body.computer-mode .tools { border-radius: 0; padding: 0; gap: 2px; }
+html[data-tema="reymuerto"] body.computer-mode .tools > button { width: auto; height: 40px; padding: 0 12px; border-radius: var(--r); flex-direction: row; gap: 8px; }
+html[data-tema="reymuerto"] body.computer-mode .tools > button.on { background: transparent; box-shadow: inset 0 -2px 0 var(--esp); border-radius: 0; padding: 0 12px; }
+@media (min-width: 1361px) { html[data-tema="reymuerto"] body.computer-mode .tools > button span { display: inline; } }
+@media (max-width: 1360px) { html[data-tema="reymuerto"] body.computer-mode .tools > button { width: 40px; padding: 0; } }
+[data-tema="reymuerto"] #ui-toggle { color: var(--esp); border-color: color-mix(in srgb, var(--esp) 40%, var(--bd)); }
+
+/* ---------- hoja «Más», teclado y cuadros ---------- */
+[data-tema="reymuerto"] .hoja, [data-tema="reymuerto"] #panel, [data-tema="reymuerto"] .tarjeta { border-color: color-mix(in srgb, var(--esp) 28%, var(--bd)); }
+[data-tema="reymuerto"] .hoja { background: color-mix(in srgb, var(--sup) 94%, #000); }
+[data-tema="reymuerto"] .hoja-cab h2, [data-tema="reymuerto"] .tarjeta-cab h2, [data-tema="reymuerto"] .panel-head .realm { font-weight: 600; letter-spacing: .08em; }
+[data-tema="reymuerto"] .rej > button { background: var(--sup2); border-color: var(--bd); }
+[data-tema="reymuerto"] .rej > button .i { color: var(--esp); }
+[data-tema="reymuerto"] .rej > button.active, [data-tema="reymuerto"] .opciones button.on { border-color: var(--esp); }
+[data-tema="reymuerto"] .calidad button.on { background: var(--bg); color: var(--esp); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--esp) 50%, transparent); }
+[data-tema="reymuerto"] .grupo-t { font-family: var(--f-t); letter-spacing: .14em; }
+[data-tema="reymuerto"] .key.enter, [data-tema="reymuerto"] .btn.pri { background: var(--ac-fill); border-color: var(--ac-fill); }
+[data-tema="reymuerto"] .key { background: var(--sup2); }
+[data-tema="reymuerto"] .toast, [data-tema="reymuerto"] #desktop-assist { border-color: color-mix(in srgb, var(--esp) 40%, var(--bd)); }
+[data-tema="reymuerto"] .file-row a, [data-tema="reymuerto"] .file-row button { color: var(--esp); }
+[data-tema="reymuerto"] .tarjeta button, [data-tema="reymuerto"] .file-label { border-color: color-mix(in srgb, var(--esp) 24%, var(--bd)); }

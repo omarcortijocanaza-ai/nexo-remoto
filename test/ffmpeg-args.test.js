@@ -7,7 +7,9 @@ const {
   gpuStreamArgs,
   profileBitrateKbps,
   profileDimensions,
-  candidateChainsForProfile
+  candidateChainsForProfile,
+  CADENAS_REV,
+  cadenaRecordada
 } = require('../platform/windows/ffmpeg');
 
 test('ffmpeg-args: dimensiones y bitrates de perfiles 720p, 900p y 1080p coinciden con Linux', () => {
@@ -84,7 +86,9 @@ test('ffmpeg-args: argumentos de cada cadena GPU para 720p/900p/1080p y 30/45/60
         } else if (chain === 'd3d11-scale') {
           assert.equal(inputVal, `ddagrab=output_idx=1:framerate=${f.fps}:draw_mouse=1,scale_d3d11=${p.width}:${p.height}:format=nv12`);
         } else if (chain === 'cuda-scale') {
-          assert.equal(inputVal, `ddagrab=output_idx=1:framerate=${f.fps}:draw_mouse=1,hwmap=derive_device=cuda,scale_cuda=${p.width}:${p.height}:format=nv12`);
+          assert.equal(inputVal, `ddagrab=output_idx=1:framerate=${f.fps}:draw_mouse=1,hwdownload,format=bgra`);
+          assert.equal(getFlag('-vf'), `hwupload_cuda,scale_cuda=${p.width}:${p.height}`);
+          assert.ok(!args.join(' ').includes('hwmap'), 'FFmpeg no sabe derivar CUDA desde D3D11: no debe haber hwmap');
         } else if (chain === 'cpu-scale') {
           assert.equal(inputVal, `ddagrab=output_idx=1:framerate=${f.fps}:draw_mouse=1,hwdownload,format=bgra,scale=${p.width}:${p.height}:flags=bilinear,format=nv12`);
         } else if (chain === 'gdigrab') {
@@ -109,4 +113,22 @@ test('ffmpeg-args: d3d11-native sólo se incluye como candidata si la resolució
   const scaledCandidates = candidateChainsForProfile({ width: 1280, height: 720, monitor, filters });
   assert.ok(!scaledCandidates.includes('d3d11-native'));
   assert.equal(scaledCandidates[0], 'd3d11-scale');
+});
+
+test('ffmpeg-args: la cadena recordada sólo vale con la misma versión de ffmpeg y la misma revisión de cadenas', () => {
+  const candidates = ['d3d11-scale', 'cuda-scale', 'cpu-scale', 'gdigrab'];
+  const base = { ffmpegVersion: 'ffmpeg version 9.0', candidates, isNativeRes: false };
+
+  // Lo guardado antes de la revisión 2 recordaba `cpu-scale`: no debe impedir que se pruebe `cuda-scale`.
+  const viejo = { ffmpegVersion: 'ffmpeg version 9.0', chain: 'd3d11-native', scaleChain: 'cpu-scale' };
+  assert.equal(cadenaRecordada({ ...base, saved: viejo }), null);
+
+  const vigente = { ...viejo, cadenasRev: CADENAS_REV };
+  assert.equal(cadenaRecordada({ ...base, saved: vigente }), 'cpu-scale');
+  assert.equal(cadenaRecordada({ ...base, saved: { ...vigente, ffmpegVersion: 'ffmpeg version 9.1' } }), null);
+
+  // A resolución nativa se usa `chain`; si no está entre las candidatas, se sondea.
+  assert.equal(cadenaRecordada({ ...base, isNativeRes: true, candidates: ['d3d11-native', 'cpu-scale'], saved: vigente }), 'd3d11-native');
+  assert.equal(cadenaRecordada({ ...base, isNativeRes: true, saved: vigente }), null);
+  assert.equal(cadenaRecordada({ ...base, saved: null }), null);
 });

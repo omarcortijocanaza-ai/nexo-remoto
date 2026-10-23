@@ -1,5 +1,5 @@
 # nexo-control para Windows: los mismos subcomandos que el `nexo-control` de Linux.
-#   start | show | link | pair [min] | rotate [-y] | status | stop | restart | log | doctor
+#   start | show | link | pair [min] | rotate [-y] | status | stop | restart | log | doctor | turn-test
 #   credentials {status | init [usuario] | set [usuario]}
 # PowerShell 7 (pwsh). Lo llama nexo-control.cmd, que sólo reenvía los argumentos.
 
@@ -179,6 +179,7 @@ switch ($Accion) {
     'restart' { Stop-Nexo; Start-Sleep -Seconds 2; Start-Nexo }
     'log' { Get-Content -LiteralPath $ArchivoRegistro -Wait -Tail 80 -Encoding utf8 }
     { $_ -in 'doctor', 'diagnostico' } { & (Join-Path $PSScriptRoot 'nexo-doctor.ps1'); exit $LASTEXITCODE }
+    { $_ -in 'turn-test', 'turn' } { & (Get-Node) (Join-Path $Raiz 'scripts	urn-test.js'); exit $LASTEXITCODE }
     { $_ -in 'credentials', 'credenciales' } { Invoke-Credenciales -Subaccion $(if ($Resto.Count) { $Resto[0] } else { 'status' }) -Usuario $(if ($Resto.Count -gt 1) { $Resto[1] } else { '' }) }
-    default { Write-Error 'Uso: nexo-control {start|show|link|pair|rotate|status|stop|restart|log|doctor|credentials}'; exit 2 }
+    default { Write-Error 'Uso: nexo-control {start|show|link|pair|rotate|status|stop|restart|log|doctor|turn-test|credentials}'; exit 2 }
 }

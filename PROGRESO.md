@@ -296,6 +296,20 @@ actualizaciones firmadas, empaquetado reproducible y los avisos de licencia de
       de `F1-opus.md`, `F7-opus.md`, `F8-opus.md` y `F10-opus.md`.
 - [ ] Latencia de punta a punta (cronómetro + foto) y PLI/NACK por Wi-Fi: los contadores existen
       (`/stats` del puente); falta medirlos con el celular.
-- [ ] Escalado por GPU para 720p/900p: `scale_d3d11` y `scale_cuda` no funcionan con
-      FFmpeg 9.0; hoy usan `cpu-scale` (≈ 50–60 % de un núcleo).
-- [ ] Opcionales del plan: **O1** (TURN), **O2** (HTTPS en LAN), **O3** (segunda sesión, investigación).
+- [x] Escalado en la GPU para 720p/900p (2026-10-17): `cuda-scale` = `hwdownload → hwupload_cuda → scale_cuda`
+      (≈ 30 % de un núcleo frente a 54–95 % de `cpu-scale`; SSIM 0,9986 contra 0,9972). `scale_d3d11` sigue fallando
+      (textura NV12) y FFmpeg 9.0 no deriva CUDA desde D3D11, así que el fotograma aún pasa por memoria.
+- [x] **O1** TURN (2026-10-17): `lib/ice.js` (Cloudflare Realtime TURN o manual), `/ice`, cabecera `X-Nexo-Ice` al puente Pion,
+      `nexo-control turn-test` y panel. Verificado contra un TURN local de Pion (con credenciales buenas hay relay, con malas no).
+      **Sin probar:** una clave real de Cloudflare y el celular por datos móviles (👤).
+- [x] **O2** HTTPS en la LAN (2026-10-17): certificado propio, puerto 8443, `wss://`, cookie `Secure`, enlace «LOCAL 🔒».
+      Verificado con Node (https y wss). **Sin probar:** que Chrome Android deje usar el micrófono tras aceptar el aviso (👤).
+- [x] **O3** investigación (2026-10-17): `docs/windows/O3-segunda-sesion.md`. Sin código; decide el dueño.
+- [ ] Reglas de firewall públicas de NEXO: el panel (Conexión) ya las cierra con un botón, **pero la red está en «Pública»**:
+      primero hay que marcarla como Privada. Lo hace el dueño desde el panel, no una sesión de desarrollo.
+
+- [x] Rediseño del panel y cliente (cierre Codex, 2026-10-17): seis vistas (Inicio · Dispositivos · Conexión · Apariencia ·
+      Ajustes · Diagnóstico), cinco apariencias (Cabina, Nativa, Rey Muerto por defecto, Cianotipo, Bloque) y
+      `GET`/`POST /api/apariencia`, página de micrófono terminada, 98 pruebas Node en verde y compilación temporal correcta.
+      Matriz responsive y contraste principal verificados; aceptación en celular real y fase L pendientes.
+      Evidencia y actualización: `docs/windows/bitacora/CIERRE-CODEX.md` y `README-WINDOWS.md`.

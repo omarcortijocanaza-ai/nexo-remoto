@@ -84,7 +84,7 @@ func (o *operaciones) Estado() EstadoPanel {
 		Estado:            nombre,
 		TextoEstado:       visual.Texto(),
 		Modo:              modo,
-		Enlaces:           Enlaces{Internet: enlaceInternet(est), Local: enlaceLocal(est)},
+		Enlaces:           Enlaces{Internet: enlaceInternet(est), Local: enlaceLocal(est), LocalSeguro: enlaceLocalSeguro(est)},
 		Autoarranque:      o.autoarranque(),
 		Elevado:           o.elevado,
 		Ajustes:           guardados,
@@ -92,6 +92,30 @@ func (o *operaciones) Estado() EstadoPanel {
 		Ocupado:           ocupado,
 		Version:           versionPanel,
 	}
+}
+
+// ---- Apariencia y dispositivos --------------------------------------------
+
+// LeerApariencia lee .nexo-apariencia.json en cada llamada (el servidor Node lo hace igual): no
+// hay caché que invalidar y cambiarla no exige reiniciar NEXO.
+func (o *operaciones) LeerApariencia() Apariencia {
+	return leerApariencia(rutaApariencia(o.a.rutas.StateDir))
+}
+
+func (o *operaciones) GuardarApariencia(a Apariencia) (Apariencia, error) {
+	valida, err := validarApariencia(a)
+	if err != nil {
+		return a, err
+	}
+	if err := guardarApariencia(rutaApariencia(o.a.rutas.StateDir), valida); err != nil {
+		return a, fmt.Errorf("No se pudo guardar la apariencia: %v", err)
+	}
+	o.a.log.Printf("panel: apariencia %s (%s, por dispositivo %v)", valida.Tema, valida.Modo, valida.PorDispositivo)
+	return valida, nil
+}
+
+func (o *operaciones) LeerDispositivos() []DispositivoPanel {
+	return leerDispositivos(rutaDispositivos(o.a.rutas.StateDir), time.Now())
 }
 
 // ---- Control --------------------------------------------------------------
@@ -241,7 +265,11 @@ func (o *operaciones) GuardarAjustes(a Ajustes) (Ajustes, error) {
 	if err := guardarAjustes(rutaAjustes(o.a.rutas.StateDir), valido); err != nil {
 		return a, fmt.Errorf("No se pudieron guardar los ajustes: %v", err)
 	}
-	o.a.log.Printf("panel: ajustes guardados (modo %s, gpu %v)", valido.Modo, valido.GPU)
+	o.a.log.Printf("panel: ajustes guardados (modo %s, gpu %v, https %v)", valido.Modo, valido.GPU, valido.HTTPSLan)
+	if valido.HTTPSLan {
+		// El puerto 8443 necesita su regla de firewall (perfil Privado). Mejor esfuerzo: si falla, el panel lo avisa en «Red».
+		go o.asegurarReglaHTTPS()
+	}
 	return valido, nil
 }
 
@@ -318,8 +346,8 @@ func (o *operaciones) CambiarContrasena(usuario, contrasena string) (string, err
 	if usuario == "" || len([]rune(usuario)) > 64 || strings.ContainsAny(usuario, "\r\n\t\x00") {
 		return "", errors.New("Escribe un usuario válido (hasta 64 caracteres).")
 	}
-	if n := len([]rune(contrasena)); n < 8 || n > 200 {
-		return "", errors.New("La contraseña debe tener entre 8 y 200 caracteres.")
+	if n := len([]rune(contrasena)); n < 10 || n > 200 {
+		return "", errors.New("La contraseña debe tener entre 10 y 200 caracteres.")
 	}
 	if strings.ContainsAny(contrasena, "\r\n\x00") {
 		return "", errors.New("La contraseña no puede llevar saltos de línea.")
@@ -477,8 +505,11 @@ func (o *operaciones) AbrirRegistros() error {
 func (o *operaciones) QR(que string) ([]byte, error) {
 	est, _ := leerEstado(o.a.rutaEstado())
 	enlace := enlaceLocal(est)
-	if que == "internet" {
+	switch que {
+	case "internet":
 		enlace = enlaceInternet(est)
+	case "localSeguro":
+		enlace = enlaceLocalSeguro(est)
 	}
 	if enlace == "" {
 		return nil, nil

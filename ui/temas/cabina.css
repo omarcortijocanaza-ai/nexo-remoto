@@ -1,0 +1,93 @@
+/* CABINA · instrumentos de cabina. Grafito cálido, ámbar de indicador, cifras en monoespaciada y rótulos en condensada.
+   Denso y pensado para leer el estado de un vistazo: franja de lecturas arriba y teclas con rótulo abajo. */
+
+[data-tema="cabina"] {
+  --f-t: "Barlow Condensed", "Arial Narrow", sans-serif; --f-c: "Barlow", system-ui, sans-serif; --f-n: "JetBrains Mono", ui-monospace, monospace;
+  --r: 2px; --rg: 3px; --foco: var(--ac);
+}
+[data-tema="cabina"][data-modo="oscuro"] {
+  --bg: #12110d; --sup: #1b1912; --sup2: #27231a; --bd: #3b362a; --tx: #efe8d6; --su: #a89f88;
+  --ac: #f2a93b; --ac-tx: #181002; --ok: #93d27b; --av: #f2a93b; --ml: #ec6a52;
+  --stage: #070604; --velo: rgba(8, 7, 4, .66); --hud: color-mix(in srgb, #12110d 92%, transparent);
+}
+[data-tema="cabina"][data-modo="claro"] {
+  --bg: #e5e1d4; --sup: #f2efe5; --sup2: #dad5c4; --bd: #b4ae9a; --tx: #1c1a14; --su: #5f5948;
+  --ac: #a85f00; --ac-tx: #ffffff; --ok: #3a8527; --av: #a85f00; --ml: #c0402b;
+  --stage: #1c1a14; --velo: rgba(28, 26, 20, .5); --hud: color-mix(in srgb, #f2efe5 94%, transparent);
+}
+html[data-tema="cabina"] { background: var(--bg); }
+[data-tema="cabina"] .luz { border-radius: 1px; width: 12px; height: 8px; }
+[data-tema="cabina"] .pill.ok .luz { box-shadow: 0 0 8px color-mix(in srgb, var(--ok) 60%, transparent); }
+[data-tema="cabina"] .mk { color: var(--ac); }
+[data-tema="cabina"] .mk-txt { display: none; }
+[data-tema="cabina"] .portal-marca .mk-txt, [data-tema="cabina"] .marca-m .mk-txt { display: inline; text-transform: uppercase; letter-spacing: .18em; font-size: 17px; }
+
+[data-tema="cabina"] .btn { font-family: var(--f-t); text-transform: uppercase; letter-spacing: .08em; font-size: 16px; font-weight: 700; background: transparent; }
+[data-tema="cabina"] .btn.pri { background: var(--ac); border-color: var(--ac); color: var(--ac-tx); }
+[data-tema="cabina"] .btn.txt { border-color: transparent; }
+
+/* ---------- portal ---------- */
+[data-tema="cabina"] #session-gate::before { background: repeating-linear-gradient(0deg, transparent 0 3px, color-mix(in srgb, var(--tx) 3%, transparent) 3px 4px); }
+[data-tema="cabina"] .portal-marca { padding-bottom: 14px; border-bottom: 1px solid var(--bd); }
+[data-tema="cabina"] .portal-marca .mk { color: var(--ac); }
+[data-tema="cabina"] .portal-vista h1 { font-size: 42px; text-transform: uppercase; letter-spacing: .01em; line-height: .98; font-weight: 700; }
+[data-tema="cabina"] .portal-vista .sub { font-size: 15px; }
+[data-tema="cabina"] .casillas i { height: 64px; font-size: 27px; background: var(--sup); border-radius: 2px; }
+[data-tema="cabina"] .casillas i.act { background: var(--sup2); border-color: var(--ac); box-shadow: none; }
+[data-tema="cabina"] .session-choice { position: relative; border-radius: 3px; }
+[data-tema="cabina"] .session-choice strong { font-size: 24px; text-transform: uppercase; letter-spacing: .03em; }
+[data-tema="cabina"] .session-choice > .i { color: var(--ac); }
+[data-tema="cabina"] .session-choice.original::before, [data-tema="cabina"] .session-choice.original::after { content: ""; position: absolute; width: 14px; height: 14px; border: 2px solid var(--ac); }
+[data-tema="cabina"] .session-choice.original::before { left: -1px; top: -1px; border-right: 0; border-bottom: 0; }
+[data-tema="cabina"] .session-choice.original::after { right: -1px; bottom: -1px; border-left: 0; border-top: 0; }
+[data-tema="cabina"] .session-choice .mini { border-radius: 1px; }
+[data-tema="cabina"] .session-choice:not(:disabled):hover { border-color: var(--ac); }
+[data-tema="cabina"] #original-login input { border-radius: 2px; }
+[data-tema="cabina"] .gate-status, [data-tema="cabina"] .nota { font-family: var(--f-n); font-size: 12px; }
+@media (min-width: 700px) { [data-tema="cabina"] .gate-card { border-radius: 3px; } }
+
+/* ---------- sesión: franja de lecturas arriba, teclas con rótulo abajo ---------- */
+[data-tema="cabina"] .top { left: 0; right: 0; top: 0; gap: 0; padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); background: var(--hud); border-bottom: 1px solid var(--bd); flex-wrap: nowrap; pointer-events: auto; }
+[data-tema="cabina"] .pill, [data-tema="cabina"] .chip { min-height: 38px; background: transparent; border: 0; border-right: 1px solid var(--bd); border-radius: 0; padding: 0 14px; backdrop-filter: none; -webkit-backdrop-filter: none; font-family: var(--f-t); text-transform: uppercase; letter-spacing: .09em; font-size: 14px; }
+[data-tema="cabina"] .pill .met { font: 500 12.5px var(--f-n); color: var(--ac); text-transform: none; letter-spacing: 0; }
+[data-tema="cabina"] .pill .met::before { content: ""; margin: 0; }
+[data-tema="cabina"] .pill { gap: 10px; }
+[data-tema="cabina"] #monitor { margin-left: auto; border-right: 0; border-left: 1px solid var(--bd); }
+[data-tema="cabina"] .chip .i { color: var(--ac); }
+[data-tema="cabina"] .tools { gap: 4px; padding: 4px; border-radius: var(--rg); background: color-mix(in srgb, var(--bg) 94%, transparent); }
+[data-tema="cabina"] .tools > button { position: relative; border: 1px solid var(--bd); border-radius: 2px; background: var(--sup); font-family: var(--f-t); text-transform: uppercase; letter-spacing: .09em; font-size: 12.5px; }
+[data-tema="cabina"] .tools > button.on { color: var(--ac); border-color: var(--ac); background: var(--sup2); }
+[data-tema="cabina"] .tools > button.on::before { content: ""; position: absolute; top: 0; left: 8px; right: 8px; height: 2px; background: var(--ac); }
+[data-tema="cabina"] #mic-nivel { background: var(--ac); }
+[data-tema="cabina"] .help, [data-tema="cabina"] .toast { border-radius: 2px; font-family: var(--f-t); letter-spacing: .06em; text-transform: uppercase; font-size: 13px; }
+/* PC */
+html[data-tema="cabina"] body.computer-mode .top { padding-top: 0; }
+html[data-tema="cabina"] body.computer-mode .tools { gap: 0; background: transparent; padding: 0; }
+html[data-tema="cabina"] body.computer-mode .tools > button { border: 0; background: transparent; border-radius: 0; font-size: 14.5px; height: var(--barra-alto); padding: 0 14px; }
+html[data-tema="cabina"] body.computer-mode .tools > button.on { background: transparent; box-shadow: inset 0 -2px 0 var(--ac); }
+html[data-tema="cabina"] body.computer-mode .tools > button.on::before { display: none; }
+@media (max-width: 1360px) { html[data-tema="cabina"] body.computer-mode .tools > button { padding: 0; width: 44px; } }
+[data-tema="cabina"] #ui-toggle { border-radius: 2px 0 0 2px; color: var(--ac); }
+
+/* ---------- hoja «Más», teclado y cuadros ---------- */
+[data-tema="cabina"] .hoja { background: var(--bg); border-radius: 3px 3px 0 0; }
+[data-tema="cabina"] body.computer-mode .hoja { border-radius: 3px; }
+[data-tema="cabina"] .hoja-cab h2, [data-tema="cabina"] .tarjeta-cab h2 { font-size: 24px; text-transform: uppercase; letter-spacing: .05em; }
+[data-tema="cabina"] .rej > button { border: 1px solid var(--bd); border-radius: 2px; background: var(--sup); font-family: var(--f-t); text-transform: uppercase; letter-spacing: .06em; font-size: 13.5px; }
+[data-tema="cabina"] .rej > button .i { color: var(--ac); }
+[data-tema="cabina"] .rej > button small { font-family: var(--f-n); text-transform: none; letter-spacing: 0; }
+[data-tema="cabina"] .calidad { border: 1px solid var(--bd); background: var(--sup); border-radius: 2px; }
+[data-tema="cabina"] .calidad button { font-family: var(--f-t); text-transform: uppercase; letter-spacing: .06em; border-radius: 1px; }
+[data-tema="cabina"] .calidad button.on { background: var(--ac); color: var(--ac-tx); box-shadow: none; }
+[data-tema="cabina"] .opciones button { border-radius: 2px; font-family: var(--f-t); text-transform: uppercase; letter-spacing: .06em; font-size: 12.5px; }
+[data-tema="cabina"] .grupo-t { font-family: var(--f-t); font-size: 13px; letter-spacing: .12em; }
+[data-tema="cabina"] #panel { background: var(--bg); }
+[data-tema="cabina"] .panel-head .realm { font-size: 20px; text-transform: uppercase; letter-spacing: .06em; }
+[data-tema="cabina"] .panel-head button, [data-tema="cabina"] .tarjeta button, [data-tema="cabina"] .file-label { font-family: var(--f-t); text-transform: uppercase; letter-spacing: .06em; font-size: 14px; border-radius: 2px; }
+[data-tema="cabina"] .key { font-family: var(--f-t); text-transform: uppercase; letter-spacing: .06em; font-size: 15px; border-radius: 2px; background: var(--sup); box-shadow: 0 2px 0 color-mix(in srgb, #000 55%, transparent); }
+[data-tema="cabina"] .key.enter { background: var(--ac); }
+[data-tema="cabina"] .remote-editor { border-radius: 2px; font-family: var(--f-n); font-size: 15px; }
+[data-tema="cabina"] .tarjeta { border-radius: 3px; background: var(--bg); }
+[data-tema="cabina"] .diagnostic-item { border-radius: 2px; }
+[data-tema="cabina"] .diagnostic-item small { font-family: var(--f-t); font-size: 12.5px; letter-spacing: .1em; }
+[data-tema="cabina"] .toast, [data-tema="cabina"] #desktop-assist, [data-tema="cabina"] #secure-banner { border-radius: 2px; }

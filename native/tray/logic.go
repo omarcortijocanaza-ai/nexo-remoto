@@ -43,13 +43,15 @@ const (
 // Estado es el contenido de <stateDir>\.nexo-state.json (lo escribe el lanzador
 // de forma atómica; aun así puede no existir todavía).
 type Estado struct {
-	Token     string `json:"token"`
-	Mode      string `json:"mode"` // local | remote | both
-	Port      int    `json:"port"`
-	LocalURL  string `json:"localUrl"`
-	RemoteURL string `json:"remoteUrl"` // vacío mientras no haya túnel
-	Status    string `json:"status"`    // running | reconnecting | stopped
-	UpdatedAt string `json:"updatedAt"`
+	Token    string `json:"token"`
+	Mode     string `json:"mode"` // local | remote | both
+	Port     int    `json:"port"`
+	LocalURL string `json:"localUrl"`
+	// LocalHTTPSURL es el enlace seguro de la LAN (vacío si el HTTPS no está activo).
+	LocalHTTPSURL string `json:"localHttpsUrl"`
+	RemoteURL     string `json:"remoteUrl"` // vacío mientras no haya túnel
+	Status        string `json:"status"`    // running | reconnecting | stopped
+	UpdatedAt     string `json:"updatedAt"`
 	// Ajustes con los que arrancó el lanzador (puede faltar en estados antiguos).
 	Ajustes *Ajustes `json:"ajustes"`
 }
@@ -127,6 +129,14 @@ func enlaceLocal(e *Estado) string {
 		return ""
 	}
 	return e.LocalURL
+}
+
+// enlaceLocalSeguro devuelve localHttpsUrl tal cual lo escribió el lanzador.
+func enlaceLocalSeguro(e *Estado) string {
+	if e == nil {
+		return ""
+	}
+	return e.LocalHTTPSURL
 }
 
 // puertoSalud elige el puerto de /health: el del estado; si no, la variable

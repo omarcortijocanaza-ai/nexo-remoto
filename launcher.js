@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 'use strict';
 
+require('./lib/bundled-runtime').prepareBundledRuntime(__dirname);
+
 const { spawn, spawnSync } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -37,6 +39,8 @@ let tunnel = null;
 let gpu = null;
 let gpuWindowsNoticed = false;
 let remoteUrl = '';
+// El servidor avisa con «HTTPS en la LAN activo» cuando el HTTPS quedó escuchando; sólo entonces se publica el enlace.
+let httpsListo = false;
 let stopping = false;
 let tunnelFailures = 0;
 let watchdog = null;
@@ -100,9 +104,10 @@ function saveState(extra = {}) {
   const aplicados = {
     modo: mode,
     gpu: entornoHijos.NEXO_GPU !== '0',
-    micDispositivo: entornoHijos.NEXO_MIC_DEVICE || ajustes.micDispositivo
+    micDispositivo: entornoHijos.NEXO_MIC_DEVICE || ajustes.micDispositivo,
+    httpsLan: Boolean(entornoHijos.NEXO_TLS_PORT)
   };
-  const state = { token, mode, port, localUrl: localUrl(), remoteUrl, ajustes: aplicados, updatedAt: new Date().toISOString(), ...extra };
+  const state = { token, mode, port, localUrl: localUrl(), localHttpsUrl: localHttpsUrl(), remoteUrl, ajustes: aplicados, updatedAt: new Date().toISOString(), ...extra };
   atomicWriteJson(statePath, state, stateMode);
 }
 
@@ -116,11 +121,17 @@ function localIp() {
 }
 
 function localUrl() { return `http://${localIp()}:${port}/?token=${token}`; }
+// Enlace seguro de la LAN (O2): vacío si el HTTPS no está activo.
+function localHttpsUrl() {
+  const puertoTls = Number(entornoHijos.NEXO_TLS_PORT) || 0;
+  return httpsListo && puertoTls && mode !== 'remote' ? `https://${localIp()}:${puertoTls}/?token=${token}` : '';
+}
 function remoteAccessUrl() { return remoteUrl ? `${remoteUrl}/?token=${token}` : ''; }
 
 function printAccess() {
   emit('\n╭─ NEXO · ACCESOS ─────────────────────────────────────────\n');
   if (mode !== 'remote') emit(`│ LOCAL    ${localUrl()}\n`);
+  if (localHttpsUrl()) emit(`│ LOCAL 🔒 ${localHttpsUrl()}\n`);
   if (remoteUrl) emit(`│ INTERNET ${remoteAccessUrl()}\n`);
   else if (mode !== 'local') emit('│ INTERNET conectando…\n');
   emit('╰───────────────────────────────────────────────────────────\n\n');
@@ -154,6 +165,11 @@ function startServer() {
   const output = data => {
     const value = data.toString();
     emit(`[servidor] ${value}`);
+    if (!httpsListo && value.includes('HTTPS en la LAN activo')) {
+      httpsListo = true;
+      saveState({ status: 'running' });
+      printAccess();
+    }
     if (!serverReady && value.includes('Teclado remoto activo')) {
       serverReady = true;
       serverBackoff = 1000;
@@ -168,6 +184,7 @@ function startServer() {
   child.on('close', code => {
     children.delete(child);
     serverReady = false;
+    httpsListo = false;
     if (!stopping) {
       const delay = serverBackoff;
       serverBackoff = Math.min(30000, serverBackoff * 2);

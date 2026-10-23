@@ -1,0 +1,16 @@
+1. Abre NEXO desde el menú Inicio.
+2. En Ajustes, configura el usuario y la contraseña de Mi PC (mínimo 10 caracteres).
+3. Pulsa Iniciar. Copia el enlace Casa para tu Wi-Fi o Internet para salir de casa.
+4. Abre el enlace en el navegador del celular y entra con tus nuevas credenciales.
+
+En el panel puedes detener NEXO y activar/desactivar el inicio automático.
+Si no tienes NVIDIA compatible, deja desactivada la aceleración GPU.
+Para el micrófono del celular instala VB-CABLE y configura su dispositivo en Ajustes.
+No se instalan controladores de audio de terceros automáticamente.
+
+Para actualizar: elige Salir en la bandeja y ejecuta el nuevo instalador.
+Para desinstalar: Salir, luego Configuración de Windows > Aplicaciones > NEXO.
+Se conservan los datos privados en %LOCALAPPDATA%\NEXO.
+
+Varios clientes pueden compartir el mismo escritorio. Las sesiones Windows
+independientes simultáneas todavía no están implementadas.

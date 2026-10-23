@@ -1,0 +1,79 @@
+/* NATIVA · se parece a las apps del sistema (Windows 11 en la PC, iOS/Android en el celular):
+ * listas agrupadas, títulos grandes, controles segmentados, azul de sistema. Lo familiar no se aprende.
+ * Usa las tipografías del propio sistema: no lleva fuentes embebidas. */
+
+@layer tema {
+
+[data-tema="nativa"] {
+  --f-t: "Segoe UI Variable Display", "SF Pro Display", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --f-c: "Segoe UI Variable Text", "SF Pro Text", -apple-system, "Segoe UI", system-ui, sans-serif; --f-n: var(--f-c);
+  --r: 9px; --rg: 14px; --qr: 198px;
+}
+[data-tema="nativa"][data-modo="claro"] {
+  --bg: #f1f1f6; --sup: #ffffff; --sup2: #e8e8ee; --bd: rgba(60, 60, 67, .22); --tx: #0c0c10; --su: #62626c;
+  --ac: #0a68f5; --ac-tx: #fff; --ok: #1fa64f; --av: #b46a00; --ml: #d3281d;
+}
+[data-tema="nativa"][data-modo="oscuro"] {
+  --bg: #161618; --sup: #242427; --sup2: #333337; --bd: rgba(255, 255, 255, .13); --tx: #f4f4f7; --su: #a8a8b2;
+  --ac: #4c93ff; --ac-tx: #06142d; --ok: #43c46c; --av: #f0a736; --ml: #ff6259;
+}
+
+[data-tema="nativa"] .mk-nativa { display: block; }
+[data-tema="nativa"] .marca { font-weight: 650; font-size: 18px; }
+[data-tema="nativa"] .btn { background: var(--sup); border-color: var(--bd); box-shadow: 0 1px 0 var(--bd); }
+[data-tema="nativa"] .btn.pri { background: var(--ac); border-color: var(--ac); color: var(--ac-tx); box-shadow: none; }
+[data-tema="nativa"] .btn.mal-fuerte { background: var(--ml); border-color: var(--ml); color: #fff; box-shadow: none; }
+[data-tema="nativa"] .tarjeta, [data-tema="nativa"] .conecta { border: 0; box-shadow: 0 1px 2px rgba(0, 0, 0, .1); }
+[data-tema="nativa"] .titulo { font-size: 30px; font-weight: 650; letter-spacing: -.01em; }
+[data-tema="nativa"] .sub { font-weight: 650; }
+[data-tema="nativa"] .opcion { border: 0; }
+[data-tema="nativa"] .opcion:has(input:checked) { box-shadow: 0 0 0 2px var(--ac); }
+[data-tema="nativa"] input[type="text"], [data-tema="nativa"] input[type="password"], [data-tema="nativa"] select, [data-tema="nativa"] textarea { border-color: transparent; background: var(--sup2); }
+[data-tema="nativa"] .campos-metodo { border: 0; }
+[data-tema="nativa"] .campos-metodo input, [data-tema="nativa"] .campos-metodo textarea { background: var(--sup); }
+[data-tema="nativa"] .ap-t { border: 0; box-shadow: 0 1px 2px rgba(0, 0, 0, .1); }
+
+[data-tema="nativa"] .est .luz { width: 12px; height: 12px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--est) 24%, transparent); }
+[data-tema="nativa"] .est h1 { font-size: 30px; font-weight: 650; letter-spacing: -.01em; }
+[data-tema="nativa"] .conecta { gap: 24px; padding: 18px; }
+[data-tema="nativa"] .qrbox { border: 1px solid var(--bd); }
+[data-tema="nativa"] .pasos { gap: 11px; }
+[data-tema="nativa"] .pasos h2 { font-size: 20px; font-weight: 650; }
+[data-tema="nativa"] .pasos ol { list-style: none; padding: 0; counter-reset: p; }
+[data-tema="nativa"] .pasos li { counter-increment: p; display: flex; gap: 10px; align-items: center; }
+[data-tema="nativa"] .pasos li::before { content: counter(p); width: 22px; height: 22px; border-radius: 50%; background: color-mix(in srgb, var(--ac) 16%, transparent); color: var(--ac); font-size: 12px; font-weight: 700; display: grid; place-items: center; flex: none; }
+[data-tema="nativa"] .enlace code { border: 0; background: var(--sup2); }
+[data-tema="nativa"] .via button[aria-checked="true"] { box-shadow: 0 1px 3px rgba(0, 0, 0, .25); color: var(--tx); background: var(--sup); }
+
+/* los cuatro datos como una lista agrupada, con iconos de color */
+[data-tema="nativa"] .datos { --datos-cols: 1; gap: 0; background: var(--sup); border-radius: var(--rg); box-shadow: 0 1px 2px rgba(0, 0, 0, .1); overflow: hidden; }
+[data-tema="nativa"] .dato { border: 0; border-radius: 0; background: transparent; align-items: center; padding: 8px 14px; position: relative; }
+[data-tema="nativa"] .dato + .dato::before { content: ""; position: absolute; top: 0; left: 58px; right: 0; height: 1px; background: var(--bd); }
+[data-tema="nativa"] .dato > .i { margin: 0; width: 30px; height: 30px; padding: 6px; border-radius: 8px; color: #fff; stroke-width: 2; }
+[data-tema="nativa"] .dato:nth-child(1) > .i { background: #0a68f5; }
+[data-tema="nativa"] .dato:nth-child(2) > .i { background: #1e8c41; }
+[data-tema="nativa"] .dato:nth-child(3) > .i { background: #7a45d6; }
+[data-tema="nativa"] .dato:nth-child(4) > .i { background: #c4630a; }
+[data-tema="nativa"] .dato > div { display: flex; align-items: center; flex-wrap: wrap; width: 100%; column-gap: 10px; }
+[data-tema="nativa"] .dato small { order: 0; font-size: 15px; color: var(--tx); font-weight: 500; flex: 0 0 110px; }
+[data-tema="nativa"] .dato b { order: 1; font-size: 15px; font-weight: 600; margin: 0; flex: 0 1 auto; }
+[data-tema="nativa"] .dato em { order: 2; margin-left: auto; text-align: right; }
+
+@media (min-width: 761px) {
+  [data-tema="nativa"] .app { grid-template-columns: 232px minmax(0, 1fr); }
+  [data-tema="nativa"] .nav { background: transparent; border-right: 0; padding: 22px 12px; }
+  [data-tema="nativa"] .it { font-weight: 500; color: var(--tx); min-height: 38px; }
+  [data-tema="nativa"] .it .i { color: var(--su); }
+  [data-tema="nativa"] .it:hover { background: color-mix(in srgb, var(--tx) 7%, transparent); }
+  [data-tema="nativa"] .it[aria-current="page"] { background: var(--sup); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
+  [data-tema="nativa"] .it[aria-current="page"] .i { color: var(--ac); }
+  [data-tema="nativa"] .it[aria-current="page"]::before { content: ""; position: absolute; left: 0; top: 11px; bottom: 11px; width: 3px; border-radius: 3px; background: var(--ac); }
+  [data-tema="nativa"] .cuerpo { padding: 24px 28px 40px 10px; }
+}
+
+@media (max-width: 760px) {
+  [data-tema="nativa"] .it[aria-current="page"] { color: var(--ac); background: color-mix(in srgb, var(--ac) 14%, transparent); }
+  [data-tema="nativa"] .dato small { flex-basis: 96px; }
+}
+
+}

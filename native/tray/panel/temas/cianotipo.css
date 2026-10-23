@@ -1,0 +1,114 @@
+/* CIANOTIPO · plano técnico. Papel vegetal con rejilla, tinta azul de imprenta, anotaciones a lápiz rojo.
+ * El panel enseña el camino de la conexión como un esquema. En oscuro es el cianotipo de verdad (fondo azul). */
+
+@layer tema {
+
+[data-tema="cianotipo"] {
+  --f-t: "Public Sans", system-ui, sans-serif; --f-c: "Public Sans", system-ui, sans-serif; --f-n: "DM Mono", ui-monospace, monospace; --f-m: "Caveat", "Segoe Print", cursive;
+  --r: 2px; --rg: 2px; --qr: 186px;
+}
+[data-tema="cianotipo"][data-modo="claro"] {
+  --bg: #f1f4f1; --sup: #ffffff; --sup2: #e3eaf3; --bd: #8aa1c8; --tx: #0f2a5e; --su: #465f8f;
+  --ac: #123f9b; --ac-tx: #fff; --lapiz: #cf3a2d; --ok: #1b7a52; --av: #a86d10; --ml: #c4281c; --lnk: #123f9b;
+  --rej: color-mix(in srgb, #9bb0d3 38%, transparent);
+}
+[data-tema="cianotipo"][data-modo="oscuro"] {
+  --bg: #0d2a5c; --sup: #123569; --sup2: #194380; --bd: #6c8fcc; --tx: #eaf1ff; --su: #aac3f0;
+  --ac: #ffe066; --ac-tx: #0d2a5c; --lapiz: #ff9d8e; --ok: #8be6b5; --av: #ffe066; --ml: #ff9d8e; --lnk: #ffe066;
+  --rej: color-mix(in srgb, #5f84c4 30%, transparent);
+}
+
+/* rejilla de papel milimetrado detrás de todo */
+[data-tema="cianotipo"] body::before {
+  background-image: linear-gradient(var(--rej) 1px, transparent 1px), linear-gradient(90deg, var(--rej) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+[data-tema="cianotipo"] .mk-cianotipo { display: block; }
+[data-tema="cianotipo"] .marca { color: var(--tx); font-weight: 800; }
+[data-tema="cianotipo"] .btn { border-color: var(--tx); background: var(--sup); }
+[data-tema="cianotipo"] .btn.pri { background: var(--ac); color: var(--ac-tx); border-color: var(--ac); }
+[data-tema="cianotipo"] .btn.mal { color: var(--ml); border-color: var(--ml); }
+[data-tema="cianotipo"] .btn.mal-fuerte { background: var(--ml); color: #fff; border-color: var(--ml); }
+[data-tema="cianotipo"] .luz { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--est, var(--su)); }
+[data-tema="cianotipo"] .tarjeta { border-color: var(--tx); background: var(--sup); }
+[data-tema="cianotipo"] .titulo { font-size: 26px; font-weight: 800; }
+[data-tema="cianotipo"] .sub { font-weight: 800; }
+[data-tema="cianotipo"] .vista-cab { border: 1px solid var(--tx); background: var(--sup); padding: 12px 16px; }
+[data-tema="cianotipo"] .opcion { border-color: var(--bd); }
+[data-tema="cianotipo"] input[type="text"], [data-tema="cianotipo"] input[type="password"], [data-tema="cianotipo"] select, [data-tema="cianotipo"] textarea { border-color: var(--tx); }
+[data-tema="cianotipo"] .interruptor { border-radius: 0; border-color: var(--tx); }
+[data-tema="cianotipo"] .interruptor .perilla { border-radius: 0; }
+[data-tema="cianotipo"] .interruptor[aria-checked="true"] .perilla { background: var(--ac-tx); }
+[data-tema="cianotipo"] .interruptor[aria-checked="true"] { background: var(--ac); }
+[data-tema="cianotipo"] .codigo-caja { border-color: var(--tx); }
+[data-tema="cianotipo"] .consola { border-color: var(--tx); }
+[data-tema="cianotipo"] .ap-t { border-color: var(--tx); }
+[data-tema="cianotipo"] .banner { border-radius: 0; }
+[data-tema="cianotipo"] dialog { border-color: var(--tx); }
+[data-tema="cianotipo"] .toast { border-color: var(--tx); border-left-width: 5px; }
+
+[data-tema="cianotipo"] .cab { border: 1px solid var(--tx); background: var(--sup); padding: 12px 16px; }
+[data-tema="cianotipo"] .est h1 { font-size: 22px; font-weight: 800; }
+[data-tema="cianotipo"] .est p { font: 12.5px var(--f-n); color: var(--su); }
+[data-tema="cianotipo"] .est .luz { width: 14px; height: 14px; }
+[data-tema="cianotipo"] .conecta { border-color: var(--tx); padding: 16px; gap: 22px; }
+[data-tema="cianotipo"] .qrbox { border: 1px solid var(--tx); border-radius: 0; padding: 10px; }
+[data-tema="cianotipo"] .qrbox::before { content: "detalle A"; position: absolute; top: -9px; left: 8px; padding: 0 6px; background: var(--sup); color: var(--tx); font: 11px var(--f-n); }
+[data-tema="cianotipo"] .pasos { gap: 10px; }
+[data-tema="cianotipo"] .pasos h2 { font-size: 19px; font-weight: 800; }
+[data-tema="cianotipo"] .pasos ol { color: var(--tx); font-size: 14px; list-style: none; counter-reset: p; padding: 0; }
+[data-tema="cianotipo"] .pasos li { counter-increment: p; display: flex; gap: 10px; }
+[data-tema="cianotipo"] .pasos li::before { content: counter(p); font: 600 12px var(--f-n); width: 18px; height: 18px; border: 1px solid var(--tx); display: grid; place-items: center; flex: none; border-radius: 50%; }
+[data-tema="cianotipo"] .via { background: transparent; border: 1px solid var(--tx); border-radius: 0; padding: 0; gap: 0; }
+[data-tema="cianotipo"] .via button { min-height: 32px; border-radius: 0; border-right: 1px solid var(--tx); color: var(--tx); font-weight: 600; font-size: 13px; }
+[data-tema="cianotipo"] .via button:last-child { border-right: 0; }
+[data-tema="cianotipo"] .via button[aria-checked="true"] { background: var(--tx); color: var(--bg); box-shadow: none; }
+[data-tema="cianotipo"] .enlace code { border-radius: 0; border-color: var(--tx); color: var(--tx); background: var(--bg); }
+
+/* los cuatro datos: tabla de planos con líneas de tinta */
+[data-tema="cianotipo"] .datos { gap: 1px; background: var(--tx); border: 1px solid var(--tx); }
+[data-tema="cianotipo"] .dato { border: 0; border-radius: 0; background: var(--sup); padding: 8px 12px; flex-direction: column; gap: 2px; }
+[data-tema="cianotipo"] .dato > .i { display: none; }
+[data-tema="cianotipo"] .dato small { font: 11px var(--f-n); text-transform: uppercase; letter-spacing: .06em; }
+[data-tema="cianotipo"] .dato b { font-size: 14.5px; margin: 0; }
+[data-tema="cianotipo"] .dato em { font: 11px var(--f-n); }
+
+/* apariencias: tarjetas */
+.vp[data-tema="cianotipo"] { border-color: var(--tx); border-radius: 0; background-image: linear-gradient(var(--rej) 1px, transparent 1px), linear-gradient(90deg, var(--rej) 1px, transparent 1px); background-size: 9px 9px; }
+.vp[data-tema="cianotipo"] .vp-nav { background: transparent; border-right-color: var(--tx); }
+.vp[data-tema="cianotipo"] .vp-nav i { border-radius: 0; height: 1px; background: var(--tx); margin-bottom: 4px; }
+.vp[data-tema="cianotipo"] .vp-nav i:first-child { height: 4px; background: var(--tx); }
+.vp[data-tema="cianotipo"] .vp-fila { border-color: var(--tx); border-radius: 0; }
+.vp[data-tema="cianotipo"] .vp-lineas .vp-btn { background: var(--tx); border-radius: 0; }
+
+@media (min-width: 761px) {
+  [data-tema="cianotipo"] .app { grid-template-columns: 178px minmax(0, 1fr); }
+  [data-tema="cianotipo"] .nav { background: color-mix(in srgb, var(--sup) 82%, transparent); border-right: 1px solid var(--tx); padding: 18px 0 14px; gap: 0; }
+  [data-tema="cianotipo"] .marca { padding: 0 18px 14px; border-bottom: 1px solid var(--tx); font-size: 18px; letter-spacing: .02em; }
+  [data-tema="cianotipo"] .nav nav { gap: 0; }
+  [data-tema="cianotipo"] .it { min-height: 42px; border-radius: 0; border-bottom: 1px solid var(--bd); padding: 0 18px; color: var(--tx); font-weight: 500; font-size: 14.5px; }
+  [data-tema="cianotipo"] .it .i { display: none; }
+  [data-tema="cianotipo"] .it:hover { background: var(--sup2); }
+  [data-tema="cianotipo"] .it[aria-current="page"] { background: repeating-linear-gradient(135deg, transparent 0 5px, var(--rej) 5px 6px); font-weight: 700; box-shadow: inset 4px 0 0 var(--tx); }
+  [data-tema="cianotipo"] .it .n { background: transparent; color: var(--tx); border: 1px solid var(--tx); border-radius: 0; font: 500 11px var(--f-n); }
+  [data-tema="cianotipo"] .nav-pie { font: 12px var(--f-n); padding: 12px 18px; border-top: 1px solid var(--tx); border-radius: 0; }
+  [data-tema="cianotipo"] .cuerpo { padding: 18px 24px 40px; gap: 16px; }
+
+  [data-tema="cianotipo"] .lapiz { display: block; position: absolute; right: 20px; top: 12px; font: 700 24px/1 var(--f-m); color: var(--lapiz); transform: rotate(-4deg); white-space: nowrap; z-index: 2; }
+  /* el esquema del camino: celular — túnel — NEXO — Wi-Fi de casa */
+  [data-tema="cianotipo"] .esq { display: flex; align-items: center; gap: 0; padding: 4px; }
+  [data-tema="cianotipo"] .esq .nodo { border: 1px solid var(--tx); background: var(--sup); padding: 8px 14px; min-width: 130px; }
+  [data-tema="cianotipo"] .esq .nodo.fuerte { background: var(--tx); color: var(--bg); }
+  [data-tema="cianotipo"] .esq .nodo b { display: block; font-size: 15px; font-weight: 800; }
+  [data-tema="cianotipo"] .esq .nodo small { font: 11.5px var(--f-n); opacity: .85; }
+  [data-tema="cianotipo"] .esq .enl { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
+  [data-tema="cianotipo"] .esq .enl span { font: 11.5px var(--f-n); white-space: nowrap; }
+  [data-tema="cianotipo"] .esq .enl i { display: block; width: 100%; height: 0; border-top: 2px solid var(--tx); position: relative; }
+  [data-tema="cianotipo"] .esq .enl i::before, [data-tema="cianotipo"] .esq .enl i::after { content: ""; position: absolute; top: -6px; width: 2px; height: 10px; background: var(--tx); }
+  [data-tema="cianotipo"] .esq .enl i::before { left: 0; }
+  [data-tema="cianotipo"] .esq .enl i::after { right: 0; }
+  [data-tema="cianotipo"] .esq .enl em { font: 700 17px var(--f-m); color: var(--lapiz); font-style: normal; }
+  [data-tema="cianotipo"] .esq .enl.casa i { border-top-style: dashed; }
+}
+
+}

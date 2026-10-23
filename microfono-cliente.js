@@ -112,11 +112,22 @@
       await this.conectar(generacion);
     }
 
+    // STUN + TURN (si el dueño configuró uno): el servidor entrega las credenciales vigentes.
+    async servidoresIce() {
+      try {
+        const respuesta = await fetch('/ice', { cache: 'no-store' });
+        if (!respuesta.ok) throw new Error('ice');
+        const datos = await respuesta.json();
+        if (Array.isArray(datos.iceServers) && datos.iceServers.length) return datos.iceServers;
+      } catch {}
+      return [{ urls: 'stun:stun.cloudflare.com:3478' }];
+    }
+
     async conectar(generacion) {
       this.publicar({ conectando: true, mensaje: 'Conectando con la PC…' });
       try {
         const pc = new RTCPeerConnection({
-          iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }],
+          iceServers: await this.servidoresIce(),
           bundlePolicy: 'max-bundle'
         });
         this.pc = pc;
@@ -390,5 +401,50 @@
     return (error && error.message) || 'No se pudo abrir el micrófono';
   }
 
-  window.NexoMicrofono = new Microfono();
+  // Modo demostración (?demo=1, sólo para revisar el aspecto): el mismo contrato que Microfono, con estados de
+  // mentira. No pide el micrófono, no abre WebRTC y no habla con el servidor.
+  class MicrofonoDemo {
+    constructor() {
+      this.estado = { ...ESTADO_INICIAL, mensaje: 'Toca el círculo para empezar.' };
+      this.oyentes = new Set();
+      this.reloj = null;
+    }
+    alCambiar(oyente) { this.oyentes.add(oyente); oyente(this.estado); return () => this.oyentes.delete(oyente); }
+    publicar(cambios = {}) {
+      this.estado = { ...this.estado, ...cambios };
+      for (const oyente of this.oyentes) { try { oyente(this.estado); } catch {} }
+    }
+    async alternar() { return this.estado.activo || this.estado.conectando ? this.desactivar() : this.activar(); }
+    async activar() {
+      this.publicar({ conectando: true, fallo: false, mensaje: 'Conectando con la PC…' });
+      setTimeout(() => {
+        this.publicar({ activo: true, conectando: false, mensaje: 'Micrófono en uso en la PC', dispositivo: 'Micrófono de demostración' });
+        clearInterval(this.reloj);
+        this.reloj = setInterval(() => {
+          if (!this.estado.activo) return;
+          const t = Date.now();
+          this.publicar({ nivel: this.estado.silenciado ? 0 : Math.max(0, Math.min(1, 0.35 + 0.3 * Math.sin(t / 230) + 0.25 * Math.sin(t / 97))) });
+        }, 120);
+      }, 700);
+    }
+    desactivar() { clearInterval(this.reloj); this.publicar({ ...ESTADO_INICIAL, mensaje: 'Micrófono apagado' }); }
+    silenciar(valor) {
+      const silenciado = valor === undefined ? !this.estado.silenciado : Boolean(valor);
+      this.publicar({ silenciado, nivel: silenciado ? 0 : this.estado.nivel });
+      return silenciado;
+    }
+  }
+
+  const demo = new URLSearchParams(location.search).get('demo') === '1';
+  window.NexoMicrofono = demo ? new MicrofonoDemo() : new Microfono();
+  if (demo) {
+    // &vista=activo | silenciado | error: arranca en ese estado, para revisar cada aspecto sin tocar nada.
+    const vista = new URLSearchParams(location.search).get('vista');
+    if (vista === 'activo' || vista === 'silenciado') {
+      window.NexoMicrofono.activar();
+      if (vista === 'silenciado') setTimeout(() => window.NexoMicrofono.silenciar(true), 900);
+    } else if (vista === 'error') {
+      window.NexoMicrofono.publicar({ fallo: true, mensaje: 'Permiso denegado. Habilita el micrófono para este sitio.' });
+    }
+  }
 })();

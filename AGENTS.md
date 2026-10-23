@@ -20,7 +20,7 @@ en curso es que NEXO funcione igual —con mejoras— cuando la PC arranca en Wi
 |---|---|
 | Plan de migración a Windows, contratos y prompts por fase | [`PLAN-MIGRACION-WINDOWS.md`](PLAN-MIGRACION-WINDOWS.md) |
 | Bitácoras de cada fase (ejecutor y revisor) | `docs/windows/bitacora/` |
-| Uso del sistema (Linux) | [`README.md`](README.md) |
+| Uso del sistema (Linux) | [`README-LINUX.md`](README-LINUX.md) |
 | Estado y pendientes del sistema Linux | [`PROGRESO.md`](PROGRESO.md) |
 | Arquitectura multimedia Linux | [`ESTADO-MVP-Y-REINICIO.md`](ESTADO-MVP-Y-REINICIO.md) |
 | Auditoría previa (Kimi, 2026-08-19) | [`ANALISIS-KIMI-MEJORAS.md`](ANALISIS-KIMI-MEJORAS.md) |

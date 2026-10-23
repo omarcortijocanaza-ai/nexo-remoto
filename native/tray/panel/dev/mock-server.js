@@ -11,6 +11,9 @@
 //   sin-admin   elevado = false
 //   sin-enlaces estado «conectando» sin ningún enlace publicado
 //   errores     todas las acciones POST devuelven {ok:false,error}
+//   sin-dispositivos  la lista de dispositivos con acceso está vacía
+// La apariencia (GET/POST /api/apariencia) vive en memoria y se inyecta en el HTML igual que lo hace
+// el servidor real (data-tema y data-pref en <html>); empieza en reymuerto/auto/false.
 // Utilidades: /dev/caducar (borra la cookie -> 401), /dev/red?caida=1 (corta las conexiones /api).
 'use strict';
 
@@ -22,8 +25,28 @@ const crypto = require('crypto');
 const PUERTO = 18900;
 const CLAVE = 'dev';
 const RAIZ = path.join(__dirname, '..');
-const ESTATICOS = { '/': 'index.html', '/index.html': 'index.html', '/panel.css': 'panel.css', '/panel.js': 'panel.js' };
-const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8' };
+// Lo único que se sirve: estos archivos y el contenido de estas carpetas (como el go:embed del panel real).
+const RAIZ_ARCHIVOS = ['index.html', 'panel.css', 'panel.js', 'tema-inicial.js'];
+const CARPETAS = ['temas', 'fuentes', 'img'];
+const MIME = {
+  '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
+  '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.webp': 'image/webp', '.png': 'image/png',
+};
+const TEMAS = ['cabina', 'nativa', 'reymuerto', 'cianotipo', 'bloque'];
+
+// URL → ruta de archivo, o null. Se compara contra el listado real de la carpeta: nada de path.join
+// con lo que pida el navegador.
+function archivoEstatico(ruta) {
+  if (ruta === '/') ruta = '/index.html';
+  const partes = ruta.split('/').filter(Boolean);
+  if (partes.length === 1 && RAIZ_ARCHIVOS.includes(partes[0])) return path.join(RAIZ, partes[0]);
+  if (partes.length === 2 && CARPETAS.includes(partes[0])) {
+    let lista = [];
+    try { lista = fs.readdirSync(path.join(RAIZ, partes[0])); } catch { /* carpeta ausente */ }
+    if (lista.includes(partes[1]) && MIME[path.extname(partes[1])]) return path.join(RAIZ, partes[0], partes[1]);
+  }
+  return null;
+}
 
 /* ---------------------------- estado en memoria --------------------------- */
 let escenario = process.env.MOCK_ESCENARIO || 'normal';
@@ -34,8 +57,21 @@ const S = {
   token: crypto.randomBytes(12).toString('hex'),
   dominio: 'cuando-lago-azul-demo',
   autoarranque: { instalado: true, activo: true },
-  ajustes: { modo: 'both', gpu: true, micDispositivo: 'CABLE Input' },
+  ajustes: { modo: 'both', gpu: true, micDispositivo: 'CABLE Input', httpsLan: false },
   ajustesPendientes: false,
+  turn: { proveedor: 'ninguno', cloudflareKeyId: '', tieneApiToken: false, manualUrls: [], manualUsuario: '', tieneCredencial: false },
+  // Red como en la PC del dueño: Ethernet marcada Pública y reglas que Windows creó solo.
+  red: {
+    comprobado: true, perfiles: [{ nombre: 'Red 3', interfaz: 'Ethernet', categoria: 'Public' }], todasPublicas: true,
+    reglasPublicas: [
+      { nombre: 'Node.js JavaScript Runtime', programa: 'C:\\Program Files\\nodejs\\node.exe', protocolo: 'TCP' },
+      { nombre: 'Node.js JavaScript Runtime', programa: 'C:\\Program Files\\nodejs\\node.exe', protocolo: 'UDP' },
+      { nombre: 'nexo-gpu-webrtc', programa: 'D:\\nexo-remoto\\bin\\win\\nexo-gpu-webrtc.exe', protocolo: 'TCP' },
+      { nombre: 'nexo-gpu-webrtc', programa: 'D:\\nexo-remoto\\bin\\win\\nexo-gpu-webrtc.exe', protocolo: 'UDP' },
+    ],
+    reglasNexo: 3, reglaHttps: false, puertoHttps: 8443,
+  },
+  apariencia: { tema: 'reymuerto', modo: 'auto', porDispositivo: false },
   aviso: { metodo: 'ninguno', ntfyServidor: 'https://ntfy.sh', ntfyTema: '', telegramChat: '', tieneTelegramToken: false },
   temporizadores: [],
 };
@@ -56,12 +92,31 @@ const elevado = () => escenario !== 'sin-admin';
 const espera = (ms, fn) => S.temporizadores.push(setTimeout(fn, ms));
 
 function enlaces() {
-  if (S.estado === 'detenido' || escenario === 'sin-enlaces') return { internet: '', local: '' };
+  if (S.estado === 'detenido' || escenario === 'sin-enlaces') return { internet: '', local: '', localSeguro: '' };
   const m = S.ajustes.modo;
   return {
     internet: S.estado === 'activo' && m !== 'local' ? `https://${S.dominio}.trycloudflare.com/?token=${S.token}` : '',
     local: m !== 'remote' ? `http://192.168.1.5:8765/?token=${S.token}` : '',
+    localSeguro: m !== 'remote' && S.ajustes.httpsLan && !S.ajustesPendientes ? `https://192.168.1.5:8443/?token=${S.token}` : '',
   };
+}
+
+// Dispositivos de ejemplo (sólo etiqueta y fechas, como el servidor real; nunca ids ni hashes).
+function dispositivos() {
+  if (escenario === 'sin-dispositivos') return [];
+  const ahora = Date.now(), min = 60000, dia = 24 * 60 * min;
+  return [
+    { etiqueta: 'Pixel de Letzus · Chrome', ultimaVez: ahora - 2 * min, creado: ahora - 12 * dia },
+    { etiqueta: 'Laptop de la oficina · Edge', ultimaVez: ahora - 3 * 60 * min, creado: ahora - 40 * dia },
+    { etiqueta: 'iPad · Safari', ultimaVez: ahora - 5 * dia, creado: ahora - 90 * dia },
+  ];
+}
+
+// Misma validación que apariencia.go (estricta al escribir).
+function validarApariencia(a) {
+  if (!TEMAS.includes(a.tema)) return 'Esa apariencia no existe: elige Cabina, Nativa, Rey Muerto, Cianotipo o Bloque.';
+  if (!['auto', 'claro', 'oscuro'].includes(a.modo)) return 'El modo debe ser automático, claro u oscuro.';
+  return '';
 }
 
 function estadoJSON() {
@@ -189,11 +244,16 @@ const servidor = http.createServer(async (req, res) => {
   }
 
   /* Archivos de la interfaz */
-  if (req.method === 'GET' && ESTATICOS[ruta]) {
-    const archivo = path.join(RAIZ, ESTATICOS[ruta]);
-    fs.readFile(archivo, (err, datos) => {
-      if (err) { res.writeHead(500); return res.end('No se pudo leer ' + archivo); }
-      res.writeHead(200, { 'Content-Type': MIME[path.extname(archivo)], 'Cache-Control': 'no-store' });
+  const estatico = req.method === 'GET' ? archivoEstatico(ruta) : null;
+  if (estatico) {
+    fs.readFile(estatico, (err, datos) => {
+      if (err) { res.writeHead(500); return res.end('No se pudo leer ' + estatico); }
+      if (path.basename(estatico) === 'index.html') {
+        // Igual que conAparienciaInicial en panel.go: el tema llega ya puesto en <html>.
+        const a = S.apariencia;
+        datos = Buffer.from(datos.toString('utf8').replace('<html lang="es">', `<html lang="es" data-tema="${a.tema}" data-pref="${a.modo}">`));
+      }
+      res.writeHead(200, { 'Content-Type': MIME[path.extname(estatico)], 'Cache-Control': 'no-store' });
       res.end(datos);
     });
     return;
@@ -221,6 +281,22 @@ const servidor = http.createServer(async (req, res) => {
     switch (`${req.method} ${ruta}`) {
       case 'GET /api/estado': return json(res, estadoJSON());
 
+      case 'GET /api/apariencia': return json(res, { ok: true, apariencia: S.apariencia });
+      case 'POST /api/apariencia': {
+        // Los campos que no lleguen conservan su valor (igual que el servidor real).
+        const nueva = { ...S.apariencia };
+        for (const k of ['tema', 'modo']) if (k in cuerpo) nueva[k] = cuerpo[k];
+        if ('porDispositivo' in cuerpo) {
+          if (typeof cuerpo.porDispositivo !== 'boolean') return json(res, { ok: false, error: 'La petición no es un JSON válido.' });
+          nueva.porDispositivo = cuerpo.porDispositivo;
+        }
+        const error = validarApariencia(nueva);
+        if (error) return json(res, { ok: false, error });
+        S.apariencia = nueva;
+        return json(res, { ok: true, apariencia: S.apariencia });
+      }
+      case 'GET /api/dispositivos': return json(res, { ok: true, dispositivos: dispositivos() });
+
       case 'POST /api/iniciar':
         if (S.estado !== 'detenido') return json(res, { ok: false, error: 'NEXO ya está en marcha' });
         accionLarga('Iniciando…', 1500, 'conectando', 'conectando', () => {
@@ -247,8 +323,9 @@ const servidor = http.createServer(async (req, res) => {
         if (!['both', 'local', 'remote'].includes(cuerpo.modo)) return json(res, { ok: false, error: 'Modo no válido' });
         const mic = String(cuerpo.micDispositivo || '');
         if (mic.length > 80) return json(res, { ok: false, error: 'El nombre del micrófono es demasiado largo (máx. 80)' });
-        const cambio = JSON.stringify(S.ajustes) !== JSON.stringify({ modo: cuerpo.modo, gpu: !!cuerpo.gpu, micDispositivo: mic });
-        S.ajustes = { modo: cuerpo.modo, gpu: !!cuerpo.gpu, micDispositivo: mic };
+        const nuevos = { modo: cuerpo.modo, gpu: !!cuerpo.gpu, micDispositivo: mic, httpsLan: !!cuerpo.httpsLan };
+        const cambio = JSON.stringify(S.ajustes) !== JSON.stringify(nuevos);
+        S.ajustes = nuevos;
         if (cambio) S.ajustesPendientes = true;
         return json(res, { ok: true, ajustes: S.ajustes, requiereReinicio: true });
       }
@@ -285,6 +362,49 @@ const servidor = http.createServer(async (req, res) => {
         await retardo(900);
         if (S.aviso.metodo === 'ninguno') return json(res, { ok: false, error: 'No hay ningún método de aviso configurado' });
         return json(res, { ok: true, texto: 'Aviso de prueba enviado.' });
+
+      case 'GET /api/turn': return json(res, { ok: true, turn: S.turn });
+      case 'POST /api/turn': {
+        await retardo(300);
+        const p = cuerpo.proveedor;
+        if (!['ninguno', 'cloudflare', 'manual'].includes(p)) return json(res, { ok: false, error: 'Elige cómo quieres conectar: ninguno, Cloudflare o manual.' });
+        if (p === 'cloudflare') {
+          if (!/^[A-Za-z0-9_-]{8,64}$/.test((cuerpo.cloudflare || {}).keyId || '')) return json(res, { ok: false, error: 'Escribe el «Key ID» de tu clave TURN de Cloudflare (letras y números, sin espacios).' });
+          if (!(cuerpo.cloudflare || {}).apiToken && !S.turn.tieneApiToken) return json(res, { ok: false, error: 'Escribe el «API Token» de esa clave TURN (Cloudflare lo muestra una sola vez al crearla).' });
+        }
+        if (p === 'manual' && !((cuerpo.manual || {}).urls || []).length) return json(res, { ok: false, error: 'Escribe al menos una dirección de servidor (por ejemplo turn:mi-servidor.net:3478).' });
+        const cf = cuerpo.cloudflare || {}, man = cuerpo.manual || {};
+        S.turn = {
+          proveedor: p, cloudflareKeyId: cf.keyId || '', tieneApiToken: !!cf.apiToken || S.turn.tieneApiToken,
+          manualUrls: man.urls || [], manualUsuario: man.usuario || '', tieneCredencial: !!man.credencial || S.turn.tieneCredencial,
+        };
+        return json(res, { ok: true, turn: S.turn });
+      }
+      case 'POST /api/turn/prueba':
+        await retardo(1500);
+        if (S.turn.proveedor === 'ninguno') return json(res, { ok: false, error: 'No hay un TURN configurado: NEXO usa sólo STUN (suficiente en casa; por datos móviles puede caer al respaldo JPEG).' });
+        if (S.turn.cloudflareKeyId === 'malo') return json(res, { ok: false, error: 'Cloudflare rechazó el token de API: revisa que sea el «TURN Key API Token» de esa clave.' });
+        return json(res, { ok: true, texto: 'TURN funcionando: ofrece 2 ruta(s) de retransmisión (70 ms).' });
+
+      case 'GET /api/red':
+        await retardo(900);
+        return json(res, { ok: true, red: { ...S.red, elevado: elevado() } });
+      case 'POST /api/red/privada':
+        await retardo(900);
+        if (!elevado()) return json(res, { ok: false, error: 'Windows sólo deja cambiar el firewall y la red a un programa con permisos de administrador.' });
+        S.red.perfiles = S.red.perfiles.map((p) => ({ ...p, categoria: 'Private' }));
+        S.red.todasPublicas = false;
+        return json(res, { ok: true, red: { ...S.red, elevado: elevado() } });
+      case 'POST /api/red/cerrar-publicas':
+        await retardo(900);
+        if (!elevado()) return json(res, { ok: false, error: 'Windows sólo deja cambiar el firewall y la red a un programa con permisos de administrador.' });
+        if (S.red.todasPublicas && !cuerpo.forzar) return json(res, { ok: false, error: 'Tu red actual está marcada como Pública: si cierras estas reglas, el celular dejará de entrar por el Wi-Fi de casa. Primero marca tu red como Privada.' });
+        S.red.reglasPublicas = [];
+        return json(res, { ok: true, red: { ...S.red, elevado: elevado() }, mensaje: 'Listo: se cerraron 4 regla(s) para redes públicas.' });
+      case 'POST /api/red/regla-https':
+        await retardo(600);
+        S.red.reglaHttps = true;
+        return json(res, { ok: true, red: { ...S.red, elevado: elevado() } });
 
       case 'GET /api/doctor':
         await retardo(escenario === 'errores' ? 1500 : 7000);

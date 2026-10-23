@@ -1,0 +1,95 @@
+/* CIANOTIPO · plano técnico. Papel con rejilla, tinta azul de imprenta y anotaciones a lápiz rojo.
+   En oscuro es el cianotipo de verdad (fondo azul de Prusia). Líneas de tinta en vez de cajas: todo parece trazado con regla. */
+
+[data-tema="cianotipo"] {
+  --f-t: "Public Sans", system-ui, sans-serif; --f-c: "Public Sans", system-ui, sans-serif; --f-n: "DM Mono", ui-monospace, monospace; --f-m: "Caveat", "Segoe Print", cursive;
+  --r: 2px; --rg: 2px;
+}
+[data-tema="cianotipo"][data-modo="claro"] {
+  --bg: #f1f4f1; --sup: #ffffff; --sup2: #e3eaf3; --bd: #9bb0d3; --tx: #0f2a5e; --su: #4c6696;
+  --ac: #123f9b; --ac-tx: #ffffff; --lapiz: #c43326; --ok: #1b7a52; --av: #a86d10; --ml: #c43326; --foco: #123f9b;
+  --rej: color-mix(in srgb, #9bb0d3 38%, transparent); --stage: #0f2a5e; --velo: rgba(15, 42, 94, .5); --hud: color-mix(in srgb, #ffffff 94%, transparent);
+}
+[data-tema="cianotipo"][data-modo="oscuro"] {
+  --bg: #0d2a5c; --sup: #123569; --sup2: #194380; --bd: #5f84c4; --tx: #eaf1ff; --su: #a5bfee;
+  --ac: #ffe066; --ac-tx: #0d2a5c; --lapiz: #ff9d8e; --ok: #8be6b5; --av: #ffe066; --ml: #ff9d8e; --foco: #ffe066;
+  --rej: color-mix(in srgb, #5f84c4 30%, transparent); --stage: #06173a; --velo: rgba(4, 14, 40, .62); --hud: color-mix(in srgb, #0d2a5c 94%, transparent);
+}
+html[data-tema="cianotipo"] { background: var(--bg); }
+[data-tema="cianotipo"] .mk { color: var(--tx); }
+[data-tema="cianotipo"] .mk-txt { font-weight: 800; }
+[data-tema="cianotipo"] .lapiz { display: block; align-self: flex-end; margin: -2px 6px 0 0; font: 700 25px/1 var(--f-m); color: var(--lapiz); transform: rotate(-4deg); white-space: nowrap; }
+[data-tema="cianotipo"] .btn { background: var(--sup); border-color: var(--tx); font-weight: 600; }
+[data-tema="cianotipo"] .btn.pri { background: var(--ac); border-color: var(--ac); color: var(--ac-tx); }
+[data-tema="cianotipo"] .btn.txt { background: transparent; border-color: transparent; color: var(--tx); text-decoration: underline; text-underline-offset: 4px; }
+[data-tema="cianotipo"] .luz { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px currentColor; color: var(--su); }
+[data-tema="cianotipo"] .luz.ok, [data-tema="cianotipo"] .ok > .luz { color: var(--ok); }
+[data-tema="cianotipo"] .luz.av, [data-tema="cianotipo"] .wait > .luz { color: var(--av); }
+[data-tema="cianotipo"] .bad > .luz { color: var(--ml); }
+
+/* ---------- portal: papel cuadriculado ---------- */
+[data-tema="cianotipo"] #session-gate::before { background-image: linear-gradient(var(--rej) 1px, transparent 1px), linear-gradient(90deg, var(--rej) 1px, transparent 1px); background-size: 24px 24px; }
+[data-tema="cianotipo"] .portal-marca { padding-bottom: 12px; border-bottom: 1px solid var(--tx); }
+[data-tema="cianotipo"] .portal-vista h1 { font-size: 30px; font-weight: 800; letter-spacing: -.01em; }
+[data-tema="cianotipo"] .portal-vista .sub, [data-tema="cianotipo"] .gate-status, [data-tema="cianotipo"] .nota { color: var(--su); }
+[data-tema="cianotipo"] .casillas i { border-radius: 0; border-color: var(--tx); background: var(--sup); font-family: var(--f-n); font-weight: 500; }
+[data-tema="cianotipo"] .casillas i.act { box-shadow: 0 0 0 2px var(--lapiz); border-color: var(--tx); }
+[data-tema="cianotipo"] .session-choice { border-radius: 0; border-color: var(--tx); background: var(--sup); }
+[data-tema="cianotipo"] .session-choice strong { font-weight: 800; }
+[data-tema="cianotipo"] .session-choice > .i { color: var(--tx); }
+[data-tema="cianotipo"] .session-choice .mini { border-radius: 0; border-color: var(--tx); }
+[data-tema="cianotipo"] .session-choice .tx span { font-family: var(--f-n); font-size: 12px; }
+[data-tema="cianotipo"] .session-choice .fila .luz { margin-left: auto; }
+[data-tema="cianotipo"] #original-login input { border-radius: 0; border-color: var(--tx); }
+[data-tema="cianotipo"] .btn.grande { border-radius: 0; }
+@media (min-width: 700px) { [data-tema="cianotipo"] .gate-card { border-color: var(--tx); border-radius: 0; background: var(--sup); } [data-tema="cianotipo"] .session-choice, [data-tema="cianotipo"] .casillas i { background: var(--bg); } }
+
+/* ---------- sesión: lecturas con marco de tinta y una «regla» de botones ---------- */
+[data-tema="cianotipo"] .pill, [data-tema="cianotipo"] .chip { background: var(--sup); border: 1px solid var(--tx); border-radius: 0; min-height: 32px; font-size: 12.5px; color: var(--tx); backdrop-filter: none; -webkit-backdrop-filter: none; }
+[data-tema="cianotipo"] .pill .est { font-weight: 700; }
+[data-tema="cianotipo"] .pill .met { font: 500 12px var(--f-n); color: var(--su); }
+[data-tema="cianotipo"] .chip .i { color: var(--tx); }
+[data-tema="cianotipo"] .tools { padding: 0; gap: 0; border: 1px solid var(--tx); border-radius: 0; background: var(--sup); }
+[data-tema="cianotipo"] .tools > button { border-radius: 0; color: var(--tx); border-right: 1px solid var(--bd); font-size: 11.5px; font-family: var(--f-n); font-weight: 500; }
+[data-tema="cianotipo"] .tools > button:last-child { border-right: 0; }
+[data-tema="cianotipo"] .tools > button.on { background: var(--tx); color: var(--bg); }
+[data-tema="cianotipo"] #mic-nivel { background: var(--lapiz); }
+@media (orientation: landscape) and (max-height: 520px) {
+  html[data-tema="cianotipo"] body.mobile-mode .tools { left: auto; right: max(10px, env(safe-area-inset-right)); top: 50%; bottom: auto; transform: translateY(-50%); flex-direction: column; max-width: none; }
+  html[data-tema="cianotipo"] body.mobile-mode .tools > button { flex: none; width: 66px; height: 54px; border-right: 0; border-bottom: 1px solid var(--bd); }
+  html[data-tema="cianotipo"] body.mobile-mode .tools > button:last-child { border-bottom: 0; }
+  html[data-tema="cianotipo"] body.mobile-mode .help { bottom: 8px; }
+}
+/* PC */
+html[data-tema="cianotipo"] body.computer-mode .top { background: var(--sup); border-bottom: 1px solid var(--tx); }
+html[data-tema="cianotipo"] body.computer-mode .tools { border: 0; background: transparent; }
+html[data-tema="cianotipo"] body.computer-mode .tools > button { border: 0; font-family: var(--f-c); font-weight: 600; font-size: 13.5px; }
+html[data-tema="cianotipo"] body.computer-mode .tools > button.on { background: var(--tx); color: var(--bg); }
+[data-tema="cianotipo"] .toast, [data-tema="cianotipo"] #desktop-assist, [data-tema="cianotipo"] #secure-banner { border-radius: 0; border-color: var(--tx); }
+[data-tema="cianotipo"] #ui-toggle { border-radius: 0; border-color: var(--tx); }
+
+/* ---------- hoja «Más», teclado y cuadros ---------- */
+[data-tema="cianotipo"] .hoja { border-radius: 0; border-color: var(--tx); background-image: linear-gradient(var(--rej) 1px, transparent 1px), linear-gradient(90deg, var(--rej) 1px, transparent 1px); background-size: 24px 24px; background-color: var(--sup); }
+[data-tema="cianotipo"] body.computer-mode .hoja { border: 1px solid var(--tx); border-radius: 0; }
+[data-tema="cianotipo"] .hoja-cab h2, [data-tema="cianotipo"] .tarjeta-cab h2 { font-weight: 800; }
+[data-tema="cianotipo"] .rej > button { background: var(--bg); border: 1px solid var(--tx); border-radius: 0; }
+[data-tema="cianotipo"] .rej > button .i { color: var(--tx); }
+[data-tema="cianotipo"] .rej > button small { font-family: var(--f-n); }
+[data-tema="cianotipo"] .rej > button.active { background: var(--tx); color: var(--bg); }
+[data-tema="cianotipo"] .calidad { background: transparent; border: 1px solid var(--tx); border-radius: 0; padding: 0; gap: 0; }
+[data-tema="cianotipo"] .calidad button { border-radius: 0; border-right: 1px solid var(--tx); color: var(--tx); min-height: 48px; }
+[data-tema="cianotipo"] .calidad button:last-child { border-right: 0; }
+[data-tema="cianotipo"] .calidad button.on { background: var(--tx); color: var(--bg); box-shadow: none; }
+[data-tema="cianotipo"] .opciones button { background: var(--bg); border: 1px solid var(--tx); border-radius: 0; color: var(--tx); }
+[data-tema="cianotipo"] .opciones button.on { background: var(--tx); color: var(--bg); }
+[data-tema="cianotipo"] .grupo-t { font-family: var(--f-n); font-weight: 500; }
+[data-tema="cianotipo"] #panel { border-radius: 0; border-top: 1px solid var(--tx); background: var(--sup); }
+[data-tema="cianotipo"] body.computer-mode #panel { border: 1px solid var(--tx); border-bottom: 0; border-radius: 0; }
+[data-tema="cianotipo"] .panel-head .realm { font-weight: 800; }
+[data-tema="cianotipo"] .panel-head button, [data-tema="cianotipo"] .tarjeta button, [data-tema="cianotipo"] .file-label, [data-tema="cianotipo"] .key { border-radius: 0; border-color: var(--tx); background: var(--bg); }
+[data-tema="cianotipo"] .key.enter { background: var(--tx); color: var(--bg); border-color: var(--tx); }
+[data-tema="cianotipo"] .remote-editor, [data-tema="cianotipo"] .tarjeta textarea { border-radius: 0; border-color: var(--tx); }
+[data-tema="cianotipo"] .tarjeta { border-radius: 0; border-color: var(--tx); }
+[data-tema="cianotipo"] .diagnostic-item, [data-tema="cianotipo"] .file-row { border-radius: 0; border-color: var(--tx); }
+[data-tema="cianotipo"] .diagnostic-item small { font-family: var(--f-n); }
+[data-tema="cianotipo"] .diagnostic-item strong { font-family: var(--f-n); }

@@ -118,7 +118,7 @@ func (b *bridge) offer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{
-		ICEServers: []webrtc.ICEServer{{URLs: []string{"stun:stun.cloudflare.com:3478"}}},
+		ICEServers: servidoresIce(r),
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -240,6 +240,7 @@ func main() {
 	}()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/offer", b.offer)
+	mux.HandleFunc("/ice-test", b.probarIce)
 	mux.HandleFunc("/health", b.stats)
 	mux.HandleFunc("/stats", b.stats)
 	server := &http.Server{Addr: net.JoinHostPort("127.0.0.1", webRTCPort), Handler: mux, ReadHeaderTimeout: 3 * time.Second}

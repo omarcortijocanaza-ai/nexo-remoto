@@ -1,0 +1,106 @@
+/* CIANOTIPO · plano técnico. Papel vegetal con rejilla, tinta azul de imprenta, anotaciones a lápiz rojo.
+   El panel enseña el camino de la conexión como un esquema. En oscuro es el cianotipo de verdad (fondo azul). */
+
+.m[data-t="cianotipo"] {
+  --f-t: "Public Sans", system-ui, sans-serif; --f-c: "Public Sans", system-ui, sans-serif; --f-n: "DM Mono", ui-monospace, monospace; --f-m: "Caveat", "Segoe Print", cursive;
+  --r: 2px; --rg: 2px;
+}
+.m[data-t="cianotipo"][data-modo="claro"] {
+  --bg: #f1f4f1; --sup: #ffffff; --sup2: #e3eaf3; --bd: #9bb0d3; --tx: #0f2a5e; --su: #4c6696;
+  --ac: #123f9b; --ac-tx: #fff; --lapiz: #cf3a2d; --ok: #1b7a52; --av: #a86d10; --ml: #cf3a2d;
+  --rej: color-mix(in srgb, #9bb0d3 38%, transparent);
+}
+.m[data-t="cianotipo"][data-modo="oscuro"] {
+  --bg: #0d2a5c; --sup: #123569; --sup2: #194380; --bd: #5f84c4; --tx: #eaf1ff; --su: #a5bfee;
+  --ac: #ffe066; --ac-tx: #0d2a5c; --lapiz: #ff9d8e; --ok: #8be6b5; --av: #ffe066; --ml: #ff9d8e;
+  --rej: color-mix(in srgb, #5f84c4 30%, transparent);
+}
+.m[data-t="cianotipo"] { background-image: linear-gradient(var(--rej) 1px, transparent 1px), linear-gradient(90deg, var(--rej) 1px, transparent 1px); background-size: 24px 24px; background-color: var(--bg); }
+[data-t="cianotipo"] .lapiz { display: block; position: absolute; font: 700 24px/1 var(--f-m); color: var(--lapiz); transform: rotate(-4deg); white-space: nowrap; z-index: 2; }
+[data-t="cianotipo"] .btn { font-weight: 600; border-radius: 2px; border-color: var(--tx); background: var(--sup); }
+[data-t="cianotipo"] .btn.pri { background: var(--ac); color: var(--ac-tx); border-color: var(--ac); }
+[data-t="cianotipo"] .btn.mal { color: var(--ml); border-color: var(--ml); }
+[data-t="cianotipo"] .luz { border-radius: 50%; box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px currentColor; color: var(--su); }
+[data-t="cianotipo"] .luz.ok { color: var(--ok); }
+
+/* panel: índice a la izquierda, un recuadro de título arriba y el esquema de la conexión */
+[data-t="cianotipo"].pnl { grid-template-columns: 178px 1fr; }
+[data-t="cianotipo"].pnl .nav { background: color-mix(in srgb, var(--sup) 80%, transparent); border-right: 1px solid var(--tx); padding: 18px 0 14px; gap: 0; }
+[data-t="cianotipo"].pnl .marca { padding: 0 18px 14px; border-bottom: 1px solid var(--tx); font-size: 18px; font-weight: 800; letter-spacing: .02em; color: var(--tx); }
+[data-t="cianotipo"].pnl .nav nav { gap: 0; }
+[data-t="cianotipo"].pnl .it { height: 42px; border-radius: 0; border-bottom: 1px solid var(--bd); padding: 0 18px; color: var(--tx); font-weight: 500; font-size: 14.5px; }
+[data-t="cianotipo"].pnl .it .i { display: none; }
+[data-t="cianotipo"].pnl .it.on { background: repeating-linear-gradient(135deg, transparent 0 5px, var(--rej) 5px 6px); font-weight: 700; box-shadow: inset 4px 0 0 var(--tx); }
+[data-t="cianotipo"].pnl .it .n { background: transparent; color: var(--tx); border: 1px solid var(--tx); border-radius: 0; font: 500 11px var(--f-n); }
+[data-t="cianotipo"].pnl .nav-pie { font: 12px var(--f-n); padding: 12px 18px; border-top: 1px solid var(--tx); }
+[data-t="cianotipo"].pnl .cuerpo { padding: 18px 24px 16px; gap: 14px; }
+[data-t="cianotipo"] .cab { border: 1px solid var(--tx); background: var(--sup); padding: 12px 16px; }
+[data-t="cianotipo"] .est h1 { font-size: 22px; font-weight: 800; }
+[data-t="cianotipo"] .est p { font: 12.5px var(--f-n); color: var(--su); }
+[data-t="cianotipo"] .est .luz { width: 14px; height: 14px; }
+[data-t="cianotipo"] .conecta { position: relative; border: 1px solid var(--tx); background: var(--sup); grid-template-columns: 186px 1fr; padding: 16px; gap: 22px; }
+[data-t="cianotipo"] .conecta .lapiz { right: 20px; top: 12px; }
+[data-t="cianotipo"] .qrbox { width: 186px; height: 186px; border: 1px solid var(--tx); border-radius: 0; padding: 10px; position: relative; }
+[data-t="cianotipo"] .qrbox::before { content: "detalle A"; position: absolute; top: -9px; left: 8px; padding: 0 6px; background: var(--sup); font: 11px var(--f-n); color: var(--tx); }
+[data-t="cianotipo"] .pasos { gap: 10px; }
+[data-t="cianotipo"] .pasos h2 { font-size: 19px; font-weight: 800; }
+[data-t="cianotipo"] .pasos ol { color: var(--tx); font-size: 14px; list-style: none; padding: 0; counter-reset: p; }
+[data-t="cianotipo"] .pasos li { counter-increment: p; display: flex; gap: 10px; }
+[data-t="cianotipo"] .pasos li::before { content: counter(p); font: 600 12px var(--f-n); width: 18px; height: 18px; border: 1px solid var(--tx); display: grid; place-items: center; flex: none; border-radius: 50%; }
+[data-t="cianotipo"] .via { background: transparent; border: 1px solid var(--tx); border-radius: 0; padding: 0; gap: 0; }
+[data-t="cianotipo"] .via button { height: 30px; border-radius: 0; border-right: 1px solid var(--tx); color: var(--tx); font-weight: 600; font-size: 13px; }
+[data-t="cianotipo"] .via button:last-child { border-right: 0; }
+[data-t="cianotipo"] .via button.on { background: var(--tx); color: var(--bg); box-shadow: none; }
+[data-t="cianotipo"] .enlace code { border-radius: 0; border-color: var(--tx); color: var(--tx); background: var(--bg); }
+[data-t="cianotipo"] .esq { display: flex; align-items: center; gap: 0; padding: 4px 4px; }
+[data-t="cianotipo"] .esq .nodo { border: 1px solid var(--tx); background: var(--sup); padding: 8px 14px; min-width: 150px; }
+[data-t="cianotipo"] .esq .nodo.fuerte { background: var(--tx); color: var(--bg); }
+[data-t="cianotipo"] .esq .nodo b { display: block; font-size: 15px; font-weight: 800; }
+[data-t="cianotipo"] .esq .nodo small { font: 11.5px var(--f-n); opacity: .8; }
+[data-t="cianotipo"] .esq .enl { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
+[data-t="cianotipo"] .esq .enl span { font: 11.5px var(--f-n); white-space: nowrap; }
+[data-t="cianotipo"] .esq .enl i { display: block; width: 100%; height: 0; border-top: 2px solid var(--tx); position: relative; }
+[data-t="cianotipo"] .esq .enl i::before, [data-t="cianotipo"] .esq .enl i::after { content: ""; position: absolute; top: -6px; width: 2px; height: 10px; background: var(--tx); }
+[data-t="cianotipo"] .esq .enl i::before { left: 0; } [data-t="cianotipo"] .esq .enl i::after { right: 0; }
+[data-t="cianotipo"] .esq .enl em { font: 700 17px var(--f-m); color: var(--lapiz); font-style: normal; }
+[data-t="cianotipo"] .esq .enl.casa i { border-top-style: dashed; }
+[data-t="cianotipo"] .datos { grid-template-columns: repeat(4, 1fr); gap: 0; border: 1px solid var(--tx); background: var(--sup); }
+[data-t="cianotipo"] .dato { border: 0; border-right: 1px solid var(--tx); border-radius: 0; background: transparent; padding: 8px 12px; flex-direction: column; gap: 2px; }
+[data-t="cianotipo"] .dato:last-child { border-right: 0; }
+[data-t="cianotipo"] .dato > .i { display: none; }
+[data-t="cianotipo"] .dato small { font: 11px var(--f-n); text-transform: uppercase; letter-spacing: .06em; }
+[data-t="cianotipo"] .dato b { font-size: 14.5px; margin: 0; }
+[data-t="cianotipo"] .dato em { font: 11px var(--f-n); }
+[data-t="cianotipo"] .dato small, [data-t="cianotipo"] .dato em { color: var(--su); }
+
+/* celular */
+[data-t="cianotipo"] .acc-p, [data-t="cianotipo"] .elegir { background: transparent; }
+[data-t="cianotipo"] .acc-p .logo, [data-t="cianotipo"] .elegir .logo { padding-bottom: 12px; border-bottom: 1px solid var(--tx); font-weight: 800; }
+[data-t="cianotipo"] .acc-p h2, [data-t="cianotipo"] .elegir h2 { font-weight: 800; font-size: 30px; letter-spacing: -.01em; }
+[data-t="cianotipo"] .acc-p .lapiz { right: 28px; top: 405px; }
+[data-t="cianotipo"] .cod span { border-radius: 0; border-color: var(--tx); background: var(--sup); }
+[data-t="cianotipo"] .cod span.ac { box-shadow: 0 0 0 2px var(--lapiz); border-color: var(--tx); }
+[data-t="cianotipo"] .elegir .dest { border-radius: 0; border-color: var(--tx); background: var(--sup); }
+[data-t="cianotipo"] .elegir .mini { border-radius: 0; border-color: var(--tx); }
+[data-t="cianotipo"] .elegir .dest b { font-weight: 800; }
+[data-t="cianotipo"] .acc-p .btn.grande { border-radius: 0; }
+
+/* sesión: regla vertical a la derecha (el pulgar llega), lecturas en el borde de arriba */
+[data-t="cianotipo"] .ses .hud > * { background: var(--sup); border: 1px solid var(--tx); border-radius: 0; height: 28px; font-size: 12.5px; color: var(--tx); }
+[data-t="cianotipo"] .ses .hud .met { font: 500 12px var(--f-n); }
+[data-t="cianotipo"] .tel.hor .ses .bar { left: auto; right: 10px; top: 50%; bottom: auto; transform: translateY(-50%); flex-direction: column; border-radius: 0; border: 1px solid var(--tx); background: var(--sup); padding: 0; gap: 0; }
+[data-t="cianotipo"] .tel.hor .ses .t { width: 62px; height: 54px; border-radius: 0; color: var(--tx); border-bottom: 1px solid var(--bd); font-size: 11.5px; }
+[data-t="cianotipo"] .tel.hor .ses .t:last-child { border-bottom: 0; }
+[data-t="cianotipo"] .ses .t.on { background: var(--tx); color: var(--bg); }
+[data-t="cianotipo"] .ses .hoja { border-radius: 0; border-color: var(--tx); background: var(--sup); }
+[data-t="cianotipo"] .ses .hoja h3 { font-weight: 800; }
+[data-t="cianotipo"] .ses .rej button { background: var(--bg); border: 1px solid var(--tx); border-radius: 0; }
+[data-t="cianotipo"] .ses .calidad { background: transparent; border: 1px solid var(--tx); border-radius: 0; padding: 0; gap: 0; }
+[data-t="cianotipo"] .ses .calidad button { border-radius: 0; border-right: 1px solid var(--tx); color: var(--tx); height: 36px; }
+[data-t="cianotipo"] .ses .calidad button:last-child { border-right: 0; }
+[data-t="cianotipo"] .ses .calidad button.on { background: var(--tx); color: var(--bg); box-shadow: none; }
+[data-t="cianotipo"] .pcw .tbar { background: var(--sup); border-bottom: 1px solid var(--tx); }
+[data-t="cianotipo"] .pcw .tbar .cen button.on { background: var(--tx); color: var(--bg); border-radius: 0; }
+[data-t="cianotipo"] .pcw .tbar .met { color: var(--lapiz); }
+[data-t="cianotipo"] .marca-m { color: var(--tx); }
+[data-t="cianotipo"] .marca-m span { font-weight: 800; }
