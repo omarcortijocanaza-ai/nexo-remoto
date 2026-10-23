@@ -193,12 +193,11 @@ Prueba el cliente sin tocar tu PC: `node scripts/ui/servir-cliente.js` y abre `h
 | `keyboard-translation.js` | Eventos de teclado → órdenes, compartido navegador/servidor |
 | `installer/` | Instalador Inno Setup y su configuración |
 | `scripts/windows/` | Instalación, build, empaquetado, doctor y control |
-| `docs/windows/` | Bitácoras de cada fase de la migración |
+| `docs/` | Guía de uso móvil y bosquejos de diseño |
 | `headless/`, `greeter/` | Sólo Linux: sesión aislada y pantalla de login |
 
 El proyecto se migró de Linux a Windows en **11 fases** (F0-F10), cada una con ejecutor, revisor, verificaciones con salida
-esperada y etiqueta `fN-ok`. El historial completo está en [`PLAN-MIGRACION-WINDOWS.md`](PLAN-MIGRACION-WINDOWS.md) y
-[`docs/windows/bitacora/`](docs/windows/bitacora/).
+esperada y etiqueta `fN-ok`. Las bitácoras y el plan completo se conservan en el historial de git (etiquetas `f0-ok` … `f10-ok`).
 
 ## Pruebas
 

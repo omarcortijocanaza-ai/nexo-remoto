@@ -1,8 +1,6 @@
 # Teclado remoto · guía del host Linux
 
-> **Migración a Windows en curso:** el contexto para agentes está en
-> [`AGENTS.md`](AGENTS.md) y el plan completo, con sus prompts, en
-> [`PLAN-MIGRACION-WINDOWS.md`](PLAN-MIGRACION-WINDOWS.md).
+> **¿Usas Windows?** Mira el [`README.md`](README.md) y [`README-WINDOWS.md`](README-WINDOWS.md).
 
 > **¿Usas NEXO en un host Windows?** Esta página describe el host Linux (Hyprland). La
 > instalación, el uso diario y la solución de problemas del host Windows están en
@@ -214,12 +212,9 @@ node -e 'require("./microfono-virtual").descargarDispositivo()'
 
 ## Sesión independiente experimental
 
-El diseño y la implementación reversible para ejecutar un segundo Hyprland bajo un
-usuario separado están en [`PLAN-SESION-INDEPENDIENTE.md`](PLAN-SESION-INDEPENDIENTE.md)
-y [`headless/README.md`](headless/README.md). La adaptación visual y de uso para una
-persona acostumbrada a Windows está detallada en
-[`PLAN-EXPERIENCIA-WINDOWS.md`](PLAN-EXPERIENCIA-WINDOWS.md). Sólo afecta al usuario
-aislado `nexo`; la sesión principal conserva su configuración.
+La implementación reversible para ejecutar un segundo Hyprland bajo un usuario separado está
+en [`headless/README.md`](headless/README.md). Sólo afecta al usuario aislado `nexo`; la sesión
+principal conserva su configuración.
 
 La URL del Nexo principal presenta primero un portal con dos destinos: **Mi PC
 original** y **NEXO**. La segunda opción usa el enlace temporal vigente de la sesión
@@ -269,21 +264,12 @@ nexo-control link
 |---|---|---|
 | [`README-LINUX.md`](README-LINUX.md) | Cómo se usa. Punto de entrada. | Vigente |
 | [`README-WINDOWS.md`](README-WINDOWS.md) | Instalar y usar NEXO en un host Windows. | Vigente |
-| [`PLAN-MIGRACION-WINDOWS.md`](PLAN-MIGRACION-WINDOWS.md) | Contratos y fases de la migración a Windows; bitácoras en `docs/windows/bitacora/`. | Vigente |
-| [`PROGRESO.md`](PROGRESO.md) | Qué está hecho, qué falta y en qué orden. | Vigente |
-| [`ESTADO-MVP-Y-REINICIO.md`](ESTADO-MVP-Y-REINICIO.md) | Arquitectura multimedia, dependencias y cómo arrancar tras reiniciar. | Vigente |
-| [`PROYECTO-NEXO-EVOLUCION.md`](PROYECTO-NEXO-EVOLUCION.md) | Plan por fases y registro de cada cambio con su motivo. | Vigente |
-| [`PLAN-SESION-INDEPENDIENTE.md`](PLAN-SESION-INDEPENDIENTE.md) | Diseño de la segunda sesión bajo el usuario `nexo`. | Vigente |
-| [`PLAN-EXPERIENCIA-WINDOWS.md`](PLAN-EXPERIENCIA-WINDOWS.md) | Adaptación visual de NEXO para quien viene de Windows. | Vigente |
-| [`DIAGNOSTICO-TECLADO.md`](DIAGNOSTICO-TECLADO.md) | Matriz de teclado y prueba manual de atajos. | Vigente |
 | [`headless/README.md`](headless/README.md) | Instalar y desinstalar la sesión independiente. | Vigente |
 | [`windows-helper/README.md`](windows-helper/README.md) | Puente de la tecla Windows para clientes Windows. | Vigente |
-| [`PROYECTO-FUTURO.md`](PROYECTO-FUTURO.md) | Visión comercial y migración a Windows. | Histórico: su backlog técnico está superado |
 | [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) | Licencias de terceros. | Vigente |
 
 El botón **ⓘ** abre un diagnóstico autenticado con navegador, transporte, FPS, RTT,
 monitor, Keyboard Lock y último tipo de evento. Su registro circular no conserva texto,
 teclas, tokens ni direcciones. El botón fijo **SUPER** arma Super para la siguiente
-tecla y el panel de atajos incluye accesos directos de validación. La matriz y el
-procedimiento están en [`DIAGNOSTICO-TECLADO.md`](DIAGNOSTICO-TECLADO.md); las pruebas
+tecla y el panel de atajos incluye accesos directos de validación. Las pruebas
 de traducción se ejecutan con `npm test`.

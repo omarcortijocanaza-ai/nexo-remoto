@@ -75,8 +75,7 @@ aplicaciones ancladas, botones de ventanas abiertas, bandeja, red, volumen,
 notificaciones, reloj y mostrar escritorio. Dolphin funciona como Explorador, las
 ventanas principales aparecen flotantes y centradas, y se crean carpetas conocidas en
 español. Incluye historial del portapapeles, capturas de pantalla, hoja de atajos,
-configuración rápida y una bienvenida de una sola vez. El diseño completo está en
-[`../PLAN-EXPERIENCIA-WINDOWS.md`](../PLAN-EXPERIENCIA-WINDOWS.md).
+configuración rápida y una bienvenida de una sola vez.
 
 Las ventanas se abren flotantes, centradas y opacas, sin huecos ni mosaico automático,
 y los avisos usan `swaync-config.json` y `swaync-style.css` propios, abajo a la derecha.
