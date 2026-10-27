@@ -10,7 +10,7 @@ Esta guía es la del host **Windows**. El host Linux (Arch + Hyprland) se descri
 
 ## Qué hace y en qué se diferencia de Linux
 
-Para instalar en **otra PC**, usa `dist/NEXO-Setup-1.0.4-x64.exe`: Windows x64,
+Para instalar en **otra PC**, usa `dist/NEXO-Setup-1.0.5-x64.exe`: Windows x64,
 Internet durante la instalación y una cuenta con permisos propios de administrador.
 No necesita Git, Go, Node ni PowerShell instalados aparte. Al terminar abre NEXO y
 configura en **Ajustes** tu usuario y contraseña de NEXO (no son los de Windows).

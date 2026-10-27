@@ -9,7 +9,7 @@
 Convierte un celular, una tablet u otra computadora en la *pantalla, teclado, mouse, altavoz y micrófono* de tu PC,
 desde el navegador, por la red de casa o por Internet.
 
-[![Descargar para Windows](https://img.shields.io/badge/Descargar-NEXO--Setup--1.0.4--x64.exe-e11d48?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/omarcortijocanaza-ai/nexo-remoto/releases/latest)
+[![Descargar para Windows](https://img.shields.io/badge/Descargar-NEXO--Setup--1.0.5--x64.exe-e11d48?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/omarcortijocanaza-ai/nexo-remoto/releases/latest)
 &nbsp;
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4?style=for-the-badge&logo=windows11&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-Hyprland-1793d1?style=for-the-badge&logo=archlinux&logoColor=white)
@@ -67,7 +67,7 @@ abrir. NEXO resuelve eso con un túnel de Cloudflare que se crea solo, **sin cue
 
 ## Pruébalo en 2 minutos (Windows)
 
-1. Descarga **`NEXO-Setup-1.0.4-x64.exe`** desde [**Releases**](https://github.com/omarcortijocanaza-ai/nexo-remoto/releases/latest).
+1. Descarga **`NEXO-Setup-1.0.5-x64.exe`** desde [**Releases**](https://github.com/omarcortijocanaza-ai/nexo-remoto/releases/latest).
 2. Ejecútalo y acepta el aviso de Windows (el instalador **no está firmado**; ver [Seguridad](#-seguridad-y-privacidad)).
 3. Abre **NEXO** desde el menú Inicio, entra en **Ajustes** y crea tu usuario y contraseña de NEXO
    (no son los de Windows).
@@ -84,11 +84,11 @@ Opcional: [VB-CABLE](https://vb-audio.com/Cable/) para usar el micrófono del ce
 <summary><b>Verificar la descarga (SHA-256)</b></summary>
 
 ```text
-AD8258BA05D4DF72B689F7138E77661AFA28A5194EF345188072E592EF630E23  NEXO-Setup-1.0.4-x64.exe
+74BBDCDF5703AECFD00B40538C0DF91F13C290020F719DF49E1E2D0A91E8C16F  NEXO-Setup-1.0.5-x64.exe
 ```
 
 ```powershell
-(Get-FileHash .\NEXO-Setup-1.0.4-x64.exe -Algorithm SHA256).Hash
+(Get-FileHash .\NEXO-Setup-1.0.5-x64.exe -Algorithm SHA256).Hash
 ```
 </details>
 

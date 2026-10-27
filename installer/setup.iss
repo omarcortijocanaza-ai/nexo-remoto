@@ -2,7 +2,7 @@
   #error Stage debe apuntar al paquete preparado por package.ps1
 #endif
 #ifndef Version
-  #define Version "1.0.4"
+  #define Version "1.0.5"
 #endif
 [Setup]
 AppId={{AB05C0D5-4F3F-48CD-926F-A44659EB2AD7}

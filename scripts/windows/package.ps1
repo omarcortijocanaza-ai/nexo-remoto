@@ -1,7 +1,7 @@
 #Requires -Version 7.4
 # Construye un instalador sin tomar estado privado ni modificar binarios en uso.
 param(
-    [string]$Version = '1.0.4',
+    [string]$Version = '1.0.5',
     [string]$NodeArchive = '',
     [string]$PowerShellArchive = '',
     [string]$FFmpegArchive = '',
