@@ -16,6 +16,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"fyne.io/systray"
@@ -33,9 +34,12 @@ type app struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	ops         *operaciones
-	panel       *Panel
-	itemPanel   *systray.MenuItem
+	ops       *operaciones
+	panel     *Panel
+	itemPanel *systray.MenuItem
+	// bandejaAceptada se activa cuando Windows acepta el icono (onReady).
+	bandejaAceptada atomic.Bool
+
 	estadoItem  *systray.MenuItem
 	itemRemoto  *systray.MenuItem
 	itemLocal   *systray.MenuItem
@@ -191,13 +195,34 @@ func main() {
 	if quierePanel {
 		go a.abrirPanel()
 	}
+	// NEXO ya está arrancando; el icono puede esperar a la barra de tareas (al
+	// iniciar sesión todavía no existe y Windows rechazaría el icono para siempre).
+	if !barraDeTareasLista() {
+		a.log.Printf("la barra de tareas aún no existe: se espera antes de poner el icono")
+		if esperarBarraDeTareas(5 * time.Minute) {
+			a.log.Printf("barra de tareas lista")
+		} else {
+			a.log.Printf("la barra de tareas no apareció en 5 minutos: se intenta igual")
+		}
+	}
+	if err := permitirAvisoDeBarra(); err != nil {
+		a.log.Printf("no se pudo permitir TaskbarCreated (el icono no volverá si el Explorador se reinicia): %v", err)
+	}
 	a.log.Printf("registrando icono de bandeja")
+	go func() {
+		// systray no informa del rechazo; si onReady no llega, que quede escrito.
+		time.Sleep(30 * time.Second)
+		if !a.bandejaAceptada.Load() {
+			a.log.Printf("Windows no aceptó el icono en 30 s: NEXO y su panel siguen funcionando sin él")
+		}
+	}()
 	systray.Run(a.alIniciar, a.alSalir)
 	borrarInfoPanel(rutas)
 	log.Printf("nexo-tray cerrado")
 }
 
 func (a *app) alIniciar() {
+	a.bandejaAceptada.Store(true)
 	a.log.Printf("Windows aceptó la bandeja")
 	for _, v := range []Visual{VisualDetenido, VisualConectando, VisualActivo} {
 		ico, err := generarICO(colorDe(v))

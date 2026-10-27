@@ -82,6 +82,15 @@ Test-Seccion 'Binarios compilados (scripts\windows\build.ps1)' {
         $ruta = Join-Path $Raiz "bin\win\$($par[0])"
         Add-Check $par[0] $(if (Test-Path -LiteralPath $ruta) { 'OK' } else { $par[1] }) $(if (Test-Path -LiteralPath $ruta) { "$([math]::Round((Get-Item -LiteralPath $ruta).Length / 1MB, 1)) MB" } else { 'falta: ejecuta scripts\windows\build.ps1' })
     }
+    # El 2026-10-27 el arreglo del arranque estaba en el fuente pero no en el .exe:
+    # en una copia con fuentes, avisar si la bandeja quedó sin recompilar.
+    $trayExe = Join-Path $Raiz 'bin\win\nexo-tray.exe'
+    $trayFuentes = Join-Path $Raiz 'native\tray'
+    if ((Test-Path -LiteralPath $trayExe) -and (Test-Path -LiteralPath $trayFuentes)) {
+        $exeFecha = (Get-Item -LiteralPath $trayExe).LastWriteTime
+        $nuevo = Get-ChildItem -LiteralPath $trayFuentes -Filter '*.go' -File | Where-Object { $_.Name -notlike '*_test.go' -and $_.LastWriteTime -gt $exeFecha } | Select-Object -First 1
+        Add-Check 'nexo-tray.exe al día' $(if ($nuevo) { 'AVISO' } else { 'OK' }) $(if ($nuevo) { "$($nuevo.Name) es más nuevo que el .exe: ejecuta scripts\windows\build.ps1" } else { 'compilado después de su código fuente' })
+    }
     Add-Check 'SmartScreen' 'OK' 'los .exe compilados aquí no están firmados: Windows puede avisar la primera vez; es normal, no desactives Defender'
 }
 
