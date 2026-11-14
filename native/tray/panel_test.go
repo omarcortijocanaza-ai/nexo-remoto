@@ -485,3 +485,17 @@ func TestAjustesIncluyenElHTTPSDeLaLAN(t *testing.T) {
 		t.Fatalf("la clave del archivo debe ser httpsLan: %s", datos)
 	}
 }
+
+func TestDominioFijoEnElEstadoDelPanel(t *testing.T) {
+	if dominioFijoDe(nil) != nil || dominioFijoDe(&Estado{}) != nil {
+		t.Fatal("sin dirección fija configurada no debe aparecer en el panel")
+	}
+	d := dominioFijoDe(&Estado{FixedURL: "https://nexo.nexussoftware.pe", FixedOK: true})
+	if d == nil || d.URL != "https://nexo.nexussoftware.pe" || !d.OK {
+		t.Fatalf("dominio fijo inesperado: %+v", d)
+	}
+	var e Estado
+	if err := json.Unmarshal([]byte(`{"remoteUrl":"https://nexo.nexussoftware.pe","fixedUrl":"https://nexo.nexussoftware.pe","fixedOk":true}`), &e); err != nil || !e.FixedOK {
+		t.Fatalf("el estado del lanzador no se leyó: %v %+v", err, e)
+	}
+}

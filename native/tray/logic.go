@@ -54,6 +54,10 @@ type Estado struct {
 	UpdatedAt     string `json:"updatedAt"`
 	// Ajustes con los que arrancó el lanzador (puede faltar en estados antiguos).
 	Ajustes *Ajustes `json:"ajustes"`
+	// Dirección fija por la VM (plan «Internet», I2). FixedURL vacío = no configurada; si FixedOK
+	// es false, RemoteURL es la de TryCloudflare.
+	FixedURL string `json:"fixedUrl"`
+	FixedOK  bool   `json:"fixedOk"`
 }
 
 // Rutas agrupa las carpetas que usa la bandeja.

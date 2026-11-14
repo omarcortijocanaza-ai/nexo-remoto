@@ -437,7 +437,8 @@
     if (!sin) {
       if (parado) { b = 'Apagado'; em = 'NEXO está detenido'; esq = 'apagado'; }
       else if (modo === 'local') { b = 'No se usa'; em = 'Modo «sólo red local»'; esq = 'no se usa'; }
-      else if (enlaceDe('internet')) { b = 'Conectado'; em = 'Túnel de Cloudflare'; esq = 'listo'; }
+      else if (estado.dominioFijo && estado.dominioFijo.ok && enlaceDe('internet')) { b = 'Conectado'; em = 'Dirección fija · ' + ((hostDe(estado.dominioFijo.url) || {}).host || estado.dominioFijo.url); esq = 'dirección fija'; }
+      else if (enlaceDe('internet')) { b = 'Conectado'; em = estado.dominioFijo ? 'Dirección fija sin respuesta · usando Cloudflare' : 'Túnel de Cloudflare'; esq = 'listo'; }
       else { b = 'Conectando…'; em = 'Publicando el enlace'; esq = 'publicando…'; }
     }
     poner($('#d-internet-b'), b); poner($('#d-internet-em'), em); poner($('#esq-internet-em'), esq);

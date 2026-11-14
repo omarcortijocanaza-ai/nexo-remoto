@@ -33,6 +33,14 @@ cable virtual para el micrófono del celular (máx. 80 caracteres). `httpsLan`: 
 HTTPS de la LAN (puerto 8443, certificado propio) y el enlace `enlaces.localSeguro`; al guardarlo
 el panel abre el puerto en el firewall (perfil Privado). **Los cambios se aplican al reiniciar NEXO.**
 
+## Dirección fija (plan «Internet», I2)
+
+Si el lanzador tiene configurada la dirección fija por la VM (`.nexo-dominio.json`, ver
+`scripts/windows/nexo-dominio.ps1`), `GET /api/estado` añade
+`"dominioFijo": {"url": "https://nexo.nexussoftware.pe", "ok": true}`. `enlaces.internet` ya es
+la dirección que funciona (la fija si `ok`, si no la de TryCloudflare): la interfaz sólo informa.
+La configuración no se hace desde el panel.
+
 ## Rutas
 
 | Método y ruta | Cuerpo | Respuesta |

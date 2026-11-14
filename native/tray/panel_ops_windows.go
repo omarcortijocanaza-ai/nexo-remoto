@@ -91,6 +91,7 @@ func (o *operaciones) Estado() EstadoPanel {
 		AjustesPendientes: pendientes,
 		Ocupado:           ocupado,
 		Version:           versionPanel,
+		DominioFijo:       dominioFijoDe(est),
 	}
 }
 

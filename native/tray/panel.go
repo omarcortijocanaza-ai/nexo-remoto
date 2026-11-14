@@ -64,6 +64,21 @@ type EstadoPanel struct {
 	AjustesPendientes bool         `json:"ajustesPendientes"`
 	Ocupado           string       `json:"ocupado"`
 	Version           string       `json:"version"`
+	// DominioFijo sólo aparece si el lanzador tiene configurada la dirección fija.
+	DominioFijo *DominioFijo `json:"dominioFijo,omitempty"`
+}
+
+// DominioFijo dice qué dirección fija hay y si responde ahora (si no, se usa TryCloudflare).
+type DominioFijo struct {
+	URL string `json:"url"`
+	OK  bool   `json:"ok"`
+}
+
+func dominioFijoDe(est *Estado) *DominioFijo {
+	if est == nil || est.FixedURL == "" {
+		return nil
+	}
+	return &DominioFijo{URL: est.FixedURL, OK: est.FixedOK}
 }
 
 // AvisoPanel es la respuesta de GET /api/aviso (nunca lleva el token de Telegram).

@@ -16,6 +16,7 @@ const { atomicWriteJson } = require('./lib/safe');
 const { RotatingLog, maskSecrets } = require('./lib/runtime-log');
 const lifecycle = require('./lib/lifecycle');
 const { entornoDeAjustes, leerAjustes } = require('./lib/settings');
+const tunelFijoLib = require('./lib/tunel-fijo');
 
 const esWindows = process.platform === 'win32';
 const root = __dirname;
@@ -39,6 +40,11 @@ let tunnel = null;
 let gpu = null;
 let gpuWindowsNoticed = false;
 let remoteUrl = '';
+// Dirección de TryCloudflare (cambia en cada arranque) y dirección fija por la VM (lib/tunel-fijo.js).
+// `remoteUrl` es la que se publica: la fija mientras responde, si no la de TryCloudflare.
+let urlCloudflare = '';
+let tunelFijo = null;
+const dominio = tunelFijoLib.leerDominio(stateDir);
 // El servidor avisa con «HTTPS en la LAN activo» cuando el HTTPS quedó escuchando; sólo entonces se publica el enlace.
 let httpsListo = false;
 let stopping = false;
@@ -107,7 +113,8 @@ function saveState(extra = {}) {
     micDispositivo: entornoHijos.NEXO_MIC_DEVICE || ajustes.micDispositivo,
     httpsLan: Boolean(entornoHijos.NEXO_TLS_PORT)
   };
-  const state = { token, mode, port, localUrl: localUrl(), localHttpsUrl: localHttpsUrl(), remoteUrl, ajustes: aplicados, updatedAt: new Date().toISOString(), ...extra };
+  const fija = dominio?.activo ? { fixedUrl: dominio.url, fixedOk: Boolean(tunelFijo?.ok), tryCloudflareUrl: urlCloudflare } : {};
+  const state = { token, mode, port, localUrl: localUrl(), localHttpsUrl: localHttpsUrl(), remoteUrl, ...fija, ajustes: aplicados, updatedAt: new Date().toISOString(), ...extra };
   atomicWriteJson(statePath, state, stateMode);
 }
 
@@ -133,6 +140,7 @@ function printAccess() {
   if (mode !== 'remote') emit(`│ LOCAL    ${localUrl()}\n`);
   if (localHttpsUrl()) emit(`│ LOCAL 🔒 ${localHttpsUrl()}\n`);
   if (remoteUrl) emit(`│ INTERNET ${remoteAccessUrl()}\n`);
+  if (remoteUrl && urlCloudflare && remoteUrl !== urlCloudflare) emit(`│ RESPALDO ${urlCloudflare}/?token=${token}\n`);
   else if (mode !== 'local') emit('│ INTERNET conectando…\n');
   emit('╰───────────────────────────────────────────────────────────\n\n');
 }
@@ -176,7 +184,7 @@ function startServer() {
       saveState({ status: 'running' });
       printAccess();
       startGpu();
-      if (mode !== 'local') startTunnel();
+      if (mode !== 'local') { startTunnel(); startTunelFijo(); }
     }
   };
   child.stdout.on('data', output);
@@ -246,11 +254,10 @@ function startTunnel() {
   const inspect = data => {
     const value = data.toString();
     const found = value.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/i);
-    if (found && found[0] !== remoteUrl) {
-      remoteUrl = found[0];
+    if (found && found[0] !== urlCloudflare) {
+      urlCloudflare = found[0];
       tunnelFailures = 0;
-      saveState({ status: 'running' });
-      printAccess();
+      actualizarUrlRemota(true);
       if (process.env.NEXO_RECREATE_TUNNEL === '1') startWatchdog();
     }
     if (/ERR|error/i.test(value)) emit(`[túnel] ${value}`, true);
@@ -261,9 +268,37 @@ function startTunnel() {
   actual.on('close', code => {
     children.delete(actual);
     tunnel = null;
-    remoteUrl = '';
-    saveState({ status: stopping ? 'stopped' : 'reconnecting' });
+    urlCloudflare = '';
+    remoteUrl = tunelFijoLib.elegirUrlRemota({ fija: dominio?.url, fijaOk: tunelFijo?.ok, tryCloudflare: '' });
+    saveState({ status: stopping ? 'stopped' : remoteUrl ? 'running' : 'reconnecting' });
     if (!stopping) { lineaError(`Túnel detenido (${code}); reintentando…`); setTimeout(startTunnel, 1500); }
+  });
+}
+
+// Recalcula el enlace de Internet (fija si responde, si no TryCloudflare) y lo publica si cambió.
+function actualizarUrlRemota(forzar = false) {
+  if (stopping) return; // al parar, el túnel fijo avisa de su cierre: no debe pisar «stopped»
+  const nueva = tunelFijoLib.elegirUrlRemota({ fija: dominio?.url, fijaOk: tunelFijo?.ok, tryCloudflare: urlCloudflare });
+  if (nueva === remoteUrl && !forzar) { saveState({ status: 'running' }); return; }
+  remoteUrl = nueva;
+  saveState({ status: remoteUrl ? 'running' : 'reconnecting' });
+  printAccess();
+}
+
+// Túnel SSH inverso a la VM del dueño. Sólo si existe `.nexo-dominio.json` activo, con llave,
+// huella de la VM y contraseña de «Mi PC» (si no, se explica en el registro y no se abre).
+function startTunelFijo() {
+  if (tunelFijo || stopping || !dominio?.activo) return;
+  const motivo = tunelFijoLib.motivoParaNoAbrir({ config: dominio, stateDir });
+  if (motivo) { lineaError(`Dirección fija no abierta: ${motivo}`); return; }
+  tunelFijo = tunelFijoLib.crearTunelFijo({
+    config: dominio,
+    stateDir,
+    puertoLocal: port,
+    lanzar: (exe, args) => spawn(exe, args, { cwd: root, env: process.env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }),
+    registrarPid: pid => { if (esWindows) lifecycle.registrarPid(stateDir, 'tunel-fijo', pid); },
+    log: texto => linea(`[dirección fija] ${texto}`),
+    alCambiar: () => actualizarUrlRemota()
   });
 }
 
@@ -273,8 +308,8 @@ function startTunnel() {
 function startWatchdog() {
   if (watchdog) return;
   watchdog = setInterval(() => {
-    if (!remoteUrl || !tunnel) return;
-    const url = new URL('/health', remoteUrl);
+    if (!urlCloudflare || !tunnel) return;
+    const url = new URL('/health', urlCloudflare);
     const opciones = { timeout: 8000 };
     const fija = process.env.NEXO_WATCHDOG_IP;
     if (fija) {
@@ -311,6 +346,8 @@ function shutdown() {
   if (stopping) return;
   stopping = true;
   saveState({ status: 'stopped' });
+  const pidFijo = tunelFijo?.parar();
+  if (pidFijo && esWindows) killTree(pidFijo, 0).catch(() => {});
   if (!esWindows) {
     for (const child of children) child.kill('SIGTERM');
     setTimeout(() => process.exit(0), 1200).unref();

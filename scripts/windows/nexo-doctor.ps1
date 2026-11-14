@@ -197,6 +197,20 @@ Test-Seccion 'Red y conexión' {
     if ($proveedor -eq 'ninguno') { Add-Check 'servidor TURN' 'OK' 'ninguno: sólo STUN (por datos móviles NEXO puede caer al respaldo JPEG; panel → Conexión)' }
     else { Add-Check 'servidor TURN' 'OK' "$proveedor (comprueba con: nexo-control turn-test)" }
 
+    # Dirección fija por la VM (plan «Internet», I2; scripts\windows\nexo-dominio.ps1).
+    $dominio = $null
+    try { $dominio = Get-Content -LiteralPath (Join-Path $DirEstado '.nexo-dominio.json') -Raw -Encoding utf8 -ErrorAction Stop | ConvertFrom-Json } catch {}
+    if (-not $dominio) { Add-Check 'dirección fija' 'OK' 'no configurada: sólo TryCloudflare (nexo-dominio.ps1 preparar)' }
+    elseif (-not $dominio.activo) { Add-Check 'dirección fija' 'OK' "$($dominio.url) preparada pero desactivada (nexo-dominio.ps1 activar)" }
+    elseif (-not (Test-Path -LiteralPath (Join-Path $DirEstado '.nexo-auth.json'))) { Add-Check 'dirección fija' 'AVISO' 'activada sin contraseña de «Mi PC»: el lanzador no la abre (nexo-control credentials init)' }
+    else {
+        $responde = $false; $vivo = $false
+        try { $vivo = (Invoke-WebRequest -Uri "http://127.0.0.1:$puerto/health" -TimeoutSec 3 -UseBasicParsing).StatusCode -eq 200 } catch {}
+        try { $responde = (Invoke-WebRequest -Uri "$($dominio.url)/health" -TimeoutSec 8 -UseBasicParsing).StatusCode -eq 200 } catch {}
+        $detalleFija = if ($responde) { "$($dominio.url) responde" } elseif ($vivo) { "$($dominio.url) no responde: se usa TryCloudflare (mira «[dirección fija]» en el registro)" } else { "$($dominio.url) (NEXO detenido)" }
+        Add-Check 'dirección fija' $(if ($responde -or -not $vivo) { 'OK' } else { 'AVISO' }) $detalleFija
+    }
+
     # Qué vídeo obtuvieron las últimas sesiones (líneas «transporte» de nexo-access.log). Si alguien
     # por Internet acabó en el respaldo JPEG y no hay TURN, esa es la causa de «se ve mal».
     $lineas = @()
