@@ -13,3 +13,9 @@ fase (el plan completo está en el historial de git). Reglas propias del revisor
   mal planteada, recházala y escribe un reencargo preciso para Argon en la bitácora.
 - Puedes usar el navegador integrado para probar el cliente en `http://127.0.0.1:8765`.
 - Si la fase pasa, etiqueta `fN-ok` y haz push de la rama y la etiqueta.
+
+## Plan «Internet» (2026-11-14)
+
+Excepción al papel de revisor: el plan [`docs/PLAN-INTERNET.md`](docs/PLAN-INTERNET.md) (vídeo
+remoto, dirección fija y mejoras) lo **ejecuta Opus 5.5 directamente**, por decisión del dueño.
+Una fase por sesión (I1, I2, I3), con sus verificaciones y la bitácora en el propio plan.
