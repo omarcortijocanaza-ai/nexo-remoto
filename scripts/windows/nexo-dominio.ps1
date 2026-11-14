@@ -68,7 +68,14 @@ switch ($Accion) {
         } else { Write-Host 'La llave del túnel ya existía; se conserva.' }
         $c = Get-Config
         $vm = if ($c -and $c.ssh) { [string]$c.ssh.host } else { $VmHost }
-        $huellas = & (Join-Path $OpenSsh 'ssh-keyscan.exe') -t ed25519 $vm 2>$null
+        # El ssh-keyscan de Windows (OpenSSH 9.5) falla con el intercambio de llaves que ofrece un
+        # Ubuntu 22.04 («unsupported KEX method sntrup761x25519»); el de Git para Windows no.
+        $huellas = @(& (Join-Path $OpenSsh 'ssh-keyscan.exe') -T 10 -t ed25519 $vm 2>$null | Where-Object { $_ -match '^\S+ ssh-ed25519 ' })
+        if (-not $huellas) {
+            $git = Get-Command git -ErrorAction SilentlyContinue
+            $keyscanGit = if ($git) { Join-Path (Split-Path (Split-Path $git.Source)) 'usr\bin\ssh-keyscan.exe' } else { '' }
+            if ($keyscanGit -and (Test-Path -LiteralPath $keyscanGit)) { $huellas = @(& $keyscanGit -T 10 -t ed25519 $vm 2>$null | Where-Object { $_ -match '^\S+ ssh-ed25519 ' }) }
+        }
         if (-not $huellas) { throw "No se pudo leer la huella de $vm (¿está encendida la VM?)" }
         $huellas | Set-Content -LiteralPath $Conocidos -Encoding ascii
         if (-not $c) { Set-Config $false; Write-Host "Configuración escrita (inactiva): $Config" }
