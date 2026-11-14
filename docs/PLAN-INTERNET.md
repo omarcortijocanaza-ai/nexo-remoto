@@ -451,3 +451,51 @@ dueño intacto):
 No verificado (👤): una sesión real por datos móviles a través del túnel de Cloudflare (la sesión
 «Mi PC» pide la contraseña del dueño) y Safari en iPhone (tiene WebCodecs desde iOS 16.4; si su
 decodificador rechazara el flujo, el cliente cae solo a los JPEG).
+
+### I2 · 2026-11-14 · Opus 5.5
+
+Inicio en `i2-start`. Hecho en la misma sesión que I1/I1b a pedido expreso del dueño.
+
+**Desviaciones del plan (justificadas):**
+- La configuración va en `.nexo-dominio.json`, no en `.nexo-settings.json`: el panel Go reescribe
+  `.nexo-settings.json` entero con su struct (`native/tray/ajustes.go`) y borraría la clave.
+- Caddy borra `Cf-Connecting-Ip` (`header_up -Cf-Connecting-Ip`): `loginKey()` cree esa cabecera
+  cuando la petición llega por el bucle local; por la VM la mandaría el cliente y podría inventar
+  IPs para esquivar el límite de intentos de contraseña. `X-Forwarded-For` lo pone Caddy.
+- `ssh-keyscan` de Windows (OpenSSH 9.5) falla con la VM («unsupported KEX method
+  sntrup761x25519»); `nexo-dominio.ps1` usa el de Git para Windows. El `ssh.exe` de Windows sí
+  conecta (probado: huella verificada y llave aceptada).
+
+**VM (con el «sí» del dueño).** Antes de cambiar nada: memoria disponible 397 MB de 956, huella
+ed25519 `SHA256:qTr48X5faWqsI4c7HUEC/v0vt7gT8H9QzEHXO27x1zQ` (coincide con la leída desde la PC),
+5095 libre, `allowtcpforwarding yes`, sin `AllowUsers`, carga 0,02. Salida del guion:
+```
+502 https://nexo.nexussoftware.pe/health (502 = falta la PC; 200 = túnel activo)
+200 https://nexussoftware.pe/
+200 https://restaurantes.nexussoftware.pe/health/ready
+200 https://canazas.nexussoftware.pe/canazas-shop/
+Listo. Respaldo en /var/backups/nexo/20261114T192232Z.
+```
+Con el túnel activo, en la VM: `sshd: nexotunel` 8,9 MB + `systemd --user` 9,9 MB + `(sd-pam)` 6,5 MB
+(≈ 25 MB; el gestor de sesión lo crea PAM al entrar el usuario), disponible 365 MB, carga 0,04.
+
+**PC.** `nexo-dominio.ps1 preparar` → llave nueva, huella guardada; `probar` → «OK: llega a NEXO
+por el túnel»; `activar` + `nexo-control restart`:
+```
+estado=running remoteUrl=https://nexo.nexussoftware.pe fixedOk=True respaldo=https://….trycloudflare.com
+[dirección fija] Dirección fija activa: https://nexo.nexussoftware.pe
+```
+Desde fuera: `/health` 200 (0,54 s), `/` 200 con `<title>NEXO · Mi PC</title>`, `Referrer-Policy:
+no-referrer`, certificado Let's Encrypt hasta 2027-02-12. Navegador integrado con `?demo=1` por el
+dominio: red `remoto`, techo 6 Mbps. Doctor: «dirección fija · https://nexo.nexussoftware.pe responde».
+Pruebas: `node --test` 167 de 167; `go test` en `native/tray` y `gpu-webrtc` pasan.
+
+**Pendientes 👤**
+- Entrar desde el celular por `https://nexo.nexussoftware.pe` (la sesión «Mi PC» pide la contraseña
+  del dueño): conexión, vídeo y teclado.
+- La bandeja que corre ahora es la anterior (renombrada a `nexo-tray.old.exe`); la nueva, que muestra
+  la dirección fija en el panel, entra al reiniciar la PC o al salir y abrir NEXO.
+- No se probó el límite de intentos por el dominio (cinco fallos bloquearían también la IP del dueño
+  15 min); la cabecera se borra en Caddy, comprobado en el Caddyfile.
+
+Etiqueta `i2-ok`.
