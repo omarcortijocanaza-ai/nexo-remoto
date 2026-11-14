@@ -196,6 +196,21 @@ Test-Seccion 'Red y conexión' {
     $proveedor = if ($turn -and $turn.proveedor) { [string]$turn.proveedor } else { 'ninguno' }
     if ($proveedor -eq 'ninguno') { Add-Check 'servidor TURN' 'OK' 'ninguno: sólo STUN (por datos móviles NEXO puede caer al respaldo JPEG; panel → Conexión)' }
     else { Add-Check 'servidor TURN' 'OK' "$proveedor (comprueba con: nexo-control turn-test)" }
+
+    # Qué vídeo obtuvieron las últimas sesiones (líneas «transporte» de nexo-access.log). Si alguien
+    # por Internet acabó en el respaldo JPEG y no hay TURN, esa es la causa de «se ve mal».
+    $lineas = @()
+    try { $lineas = @(Get-Content -LiteralPath (Join-Path $DirEstado 'nexo-access.log') -Encoding utf8 -ErrorAction Stop | Where-Object { $_ -match '"type":"transporte"' } | Select-Object -Last 20 | ForEach-Object { $_ | ConvertFrom-Json }) } catch {}
+    if (-not $lineas.Count) { Add-Check 'vídeo de las últimas sesiones' 'OK' 'sin datos todavía (se registra desde NEXO 1.1)' }
+    else {
+        $cuenta = { param($t) @($lineas | Where-Object { $_.transport -eq $t }).Count }
+        $remotoRespaldo = @($lineas | Where-Object { $_.transport -eq 'fallback' -and $_.origen -eq 'remoto' }).Count
+        $relay = @($lineas | Where-Object { $_.ruta -match 'relay' }).Count
+        $detalle = "últimas $($lineas.Count): GPU $(& $cuenta 'gpu') · CPU $(& $cuenta 'rtc') · respaldo $(& $cuenta 'fallback') (por Internet $remotoRespaldo) · por TURN $relay"
+        $estadoVideo = if ($remotoRespaldo -gt 0 -and $proveedor -eq 'ninguno') { 'AVISO' } else { 'OK' }
+        if ($estadoVideo -eq 'AVISO') { $detalle += ' → activa un TURN (panel → Conexión)' }
+        Add-Check 'vídeo de las últimas sesiones' $estadoVideo $detalle
+    }
 }
 
 Test-Seccion 'Autoarranque' {

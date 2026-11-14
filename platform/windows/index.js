@@ -269,7 +269,7 @@ function screenshotJpeg({ monitor, quality = 5 } = {}) {
   });
 }
 
-function startJpegStream({ monitor, fps = 10, quality = 8, onFrame } = {}) {
+function startJpegStream({ monitor, fps = 12, quality = 48, onFrame } = {}) {
   if (activeJpegController) {
     activeJpegController.stop();
     activeJpegController = null;

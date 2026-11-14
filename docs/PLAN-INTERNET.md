@@ -321,3 +321,86 @@ Mensaje para Opus (cambiar el número de fase):
 ## 7. Bitácora
 
 (Opus añade aquí, por fase: qué hizo, salida real de cada verificación, dudas y pendientes 👤.)
+
+### I1 · 2026-11-14 · Opus 5.5
+
+Inicio en `i1-start` (`23c79fb`). NEXO estaba detenido al empezar; se arrancó con `nexo-control start`
+para las pruebas y se volvió a detener al terminar. El perfil GPU del dueño (`{"fps":45,"height":1080}`)
+se restauró después de las pruebas de bitrate.
+
+**V1 · TURN en el vídeo GPU.** `startGpuRtc()` y `startRtc()` crean la conexión con
+`configuracionRtc()` (servidores de `/ice` y, con `?ice=relay`, `iceTransportPolicy:'relay'`).
+Prueba `test/cliente-internet.test.js`: no queda ningún `RTCPeerConnection` con STUN literal.
+Nota: `?ice=relay` sólo sobrevive en un dispositivo ya emparejado (el canje del token redirige a `/`).
+
+**V2 · Transporte por sesión.** `lib/registro-transporte.js` (pruebas en
+`test/registro-transporte.test.js`) y `POST /diagnostics/client` escriben en `nexo-access.log`.
+Servidor real con plataforma falsa en un puerto de bucle local (script en el scratchpad):
+```
+líneas transporte: 2
+{"type":"transporte","label":"Navegador · computadora","origen":"lan","transport":"gpu","ruta":"srflx→relay","fps":44,"kbps":3900,"perdida":0.2}
+{"type":"transporte","label":"Chrome · móvil","origen":"remoto","transport":"fallback","ruta":"","fps":44,"kbps":3900,"perdida":0.2}
+IP en el registro: no
+```
+El envío repetido no escribe y el cambio a respaldo dentro de 30 s del mismo dispositivo se aplaza.
+Doctor: nueva comprobación «vídeo de las últimas sesiones» (hoy: «sin datos todavía»).
+No se pudo ver en la sesión real: el diagnóstico exige iniciar sesión en «Mi PC» y la contraseña es del dueño.
+
+**V3 · Codificador.** Fuente sintética (capturas del repo apiladas, 1920×3860, desplazamiento de
+150 px/s, 20 s a 45 FPS, ffv1). SSIM por fotograma alineado con `setpts=N` (sin eso la comparación
+salía desplazada un fotograma y daba 0,95 en todo):
+
+| Config | kbps | SSIM medio | SSIM p1 | SSIM mín | × tiempo real |
+|---|---|---|---|---|---|
+| viejo (p1, g=fps/2, búfer 1 fotograma) | 4000 | 0,9943 | 0,9696 | 0,9627 | 5,2 |
+| nuevo p4 | 4000 | 0,9975 | 0,9920 | 0,9872 | 3,7 |
+| nuevo p3 | 4000 | 0,9975 | 0,9920 | 0,9872 | 4,5 |
+| nuevo p2 | 4000 | 0,9973 | 0,9896 | 0,9798 | 5,0 |
+| viejo | 10000 | 0,9964 | 0,9800 | 0,9597 | 6,0 |
+| nuevo p4 | 10000 | 0,9987 | 0,9972 | 0,9946 | 4,4 |
+
+Queda **p4** (≥ 2× tiempo real, y gana en SSIM mínimo; p3 da lo mismo). El nuevo a 4 Mbps supera al
+viejo a 10 Mbps. Prueba real por bucle local (navegador integrado en la página del puente
+`127.0.0.1:9090`, receptor H.264 sin mostrar la imagen), 10 s por medición:
+```
+perfil del dueño 1080p45:        9980 kbps · 449 fotogramas · 5 IDR · 0 perdidos
+1080p30 a 2500 kbps:             2509 kbps · 301 fotogramas · 5 IDR · 0 perdidos
+cambio en caliente a 6000 kbps:  6008 kbps · 300 fotogramas · 0 perdidos · ≈500 ms sin imagen
+/gpu-webrtc/stats al final:      pli 4 · nack 0 · fir 0
+registro: «Reconfigurando GPU: …@30:2500» → «NVENC 2500 kbps» → «…@30:6000» → «NVENC 6000 kbps»
+```
+Cambiar los FPS reinicia el puente y corta la conexión GPU (comportamiento anterior; el cliente
+reconecta solo en ≈1,4 s). Por eso la adaptación toca los FPS sólo como último recurso.
+
+**V4 · Bitrate separado.** `lib/perfil-gpu.js` (escalera, validación) usado por `server.js` y
+`gpu-stream-windows.js`; `platform/windows/ffmpeg.js` reexporta `ESCALERA_KBPS`. Desviación menor:
+la escalera vive en `lib/` y no en `ffmpeg.js` porque `server.js` es compartido con Linux y no debe
+cargar código de `platform/windows`. `/gpu-profile` con `kbps` fuera de la escalera → 400; sin
+`kbps` → igual que antes. Cliente: preferencias `nexoPerfilLan` / `nexoPerfilRemoto` (las claves
+viejas pasan a la LAN), fila «Uso de datos» (Bajo 2,5 · Normal 6 · Máximo 10 Mbps), perfil enviado
+al empezar el vídeo GPU. Comprobado en el navegador: en `127.0.0.1` red `lan` y techo 10 Mbps; por
+el túnel de TryCloudflare (`?demo=1`) red `remoto`, 30 FPS y techo 6 Mbps; sin errores de consola.
+
+**V5 · Calidad automática.** `ui/calidad-auto.js` (puro; pruebas en `test/calidad-auto.test.js`):
+pérdida por ventana, umbrales del plan, 20 s entre cambios, baja bitrate → altura → FPS y sube en
+orden inverso hasta el techo. RTT del par ICE cuando no hay pong. Sólo se adapta el vídeo GPU: el de
+CPU (libwebrtc) ya trae su propio control de congestión (antes la adaptación reiniciaba también la
+conexión CPU).
+
+**V6 · Respaldo JPEG.** Desviación: `server.js` **no** se cambió a `{fps: 12, quality: 7}` porque
+en Linux esa `quality` va a `grim -q` (escala 0–100) y 7 hundiría la imagen. En su lugar
+`platform/windows/ffmpeg.js` convierte de forma explícita y probada: calidad 0–100 → q de mjpeg
+(48 → 7) y FPS recortados a `JPEG_MAX_FPS = 12` (antes 30 → 10 a escondidas y q = 8). Aviso
+«Modo de respaldo…» por Internet tras 8 s, una vez por sesión, con botón «Entendido».
+
+**Pruebas.** `node --test`: 155 de 155. Go no se tocó en I1 (no hay que recompilar binarios).
+
+**Pendientes 👤**
+- V7: crear la clave TURN de Cloudflare y pegarla en el panel; luego `nexo-control turn-test` y abrir
+  el cliente con `?ice=relay` en un dispositivo ya emparejado (ruta `relay→…` en Diagnóstico).
+- Probar una sesión real por Internet (celular por datos móviles) y mirar después el doctor
+  («vídeo de las últimas sesiones»).
+- En la lista de dispositivos queda «enlace · Chrome · computadora» de las 12:22 (17:22 UTC): es el
+  navegador integrado de esta prueba; se puede revocar desde Diagnóstico.
+
+Dudas: ninguna que bloquee. Etiqueta `i1-ok`.

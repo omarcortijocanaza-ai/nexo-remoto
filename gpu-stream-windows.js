@@ -7,6 +7,7 @@ const path = require('node:path');
 const { defaultStateDir, ensurePrivateDir } = require('./lib/paths');
 const { killTree } = require('./lib/proc');
 const { readJsonSafe } = require('./lib/safe');
+const { leerPerfil } = require('./lib/perfil-gpu');
 const { AgentClient } = require('./platform/windows/agent-client');
 const {
   findFfmpeg,
@@ -120,19 +121,16 @@ async function resolveMonitorObject(preferredName) {
 }
 
 function selectedProfile() {
-  const profile = readJsonSafe(profileStatePath, null);
-  if (
-    profile &&
-    [30, 45, 60].includes(Number(profile.fps)) &&
-    [720, 900, 1080].includes(Number(profile.height))
-  ) {
-    const nextHeight = Number(profile.height);
-    const dims = profileDimensions(nextHeight);
+  const profile = leerPerfil(readJsonSafe(profileStatePath, null));
+  if (profile) {
+    const dims = profileDimensions(profile.height);
     return {
-      fps: Number(profile.fps),
+      fps: profile.fps,
       height: dims.height,
       width: dims.width,
-      bitrate: profileBitrateKbps(dims.height, process.env.NEXO_GPU_BITRATE)
+      // NEXO_GPU_BITRATE (prueba o servicio) gana; luego el bitrate que pidió el cliente
+      // (calidad automática); sin él, el ligado a la altura de siempre.
+      bitrate: profileBitrateKbps(dims.height, process.env.NEXO_GPU_BITRATE || profile.kbps)
     };
   }
   const dims = profileDimensions(height, width);

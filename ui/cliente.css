@@ -254,14 +254,16 @@ body.computer-mode .help { bottom: 18px; }
 body.computer-mode .toast { top: calc(var(--barra-alto) + 14px); }
 
 /* Avisos: ayudante de atajos y pantalla protegida de Windows */
-#desktop-assist, #secure-banner {
+#desktop-assist, #secure-banner, #fallback-banner {
   position: fixed; left: 50%; transform: translateX(-50%); max-width: min(660px, calc(100vw - 24px));
   top: calc(max(10px, env(safe-area-inset-top)) + 52px); display: flex; align-items: center; gap: 10px; padding: 10px 12px;
   background: var(--sup); color: var(--tx); border: var(--bw) solid var(--ac); border-radius: var(--rg); font-size: 13px; box-shadow: 0 12px 36px rgba(0, 0, 0, .35);
 }
-body.computer-mode #desktop-assist, body.computer-mode #secure-banner { top: calc(var(--barra-alto) + 12px); }
+body.computer-mode #desktop-assist, body.computer-mode #secure-banner, body.computer-mode #fallback-banner { top: calc(var(--barra-alto) + 12px); }
 #desktop-assist { z-index: 18; }
-#desktop-assist span { min-width: 0; flex: 1; }
+#desktop-assist span, #fallback-banner span { min-width: 0; flex: 1; }
+#fallback-banner { z-index: 19; }
+#fallback-banner button { flex: none; min-height: 40px; padding: 0 14px; border-radius: var(--r); background: var(--sup2); color: var(--tx); font-weight: 700; font-size: 13px; }
 #desktop-assist a, #desktop-assist button { flex: none; display: inline-grid; place-items: center; min-height: 40px; padding: 0 14px; border-radius: var(--r); background: var(--ac); color: var(--ac-tx); text-decoration: none; font-weight: 700; font-size: 13px; }
 #desktop-assist button { background: var(--sup2); color: var(--tx); }
 #secure-banner { z-index: 22; border-color: var(--ml); text-align: center; justify-content: center; }

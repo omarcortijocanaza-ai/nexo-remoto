@@ -7,6 +7,7 @@ const { EventEmitter } = require('node:events');
 const { PassThrough, Transform } = require('node:stream');
 const { atomicWriteJson, readJsonSafe } = require('../../lib/safe');
 const { killTree } = require('../../lib/proc');
+const { ESCALERA_KBPS } = require('../../lib/perfil-gpu');
 
 const SOI_MARKER = Buffer.from([0xFF, 0xD8]);
 const EOI_MARKER = Buffer.from([0xFF, 0xD9]);
@@ -112,14 +113,20 @@ function gpuEncoderArgs({ fps = 60, height = 1080, bitrateKbps, rtpPort = 5004 }
   const f = Number(fps) || 60;
   const kbps = profileBitrateKbps(height, bitrateKbps);
   const bitrateBps = kbps * 1000;
-  const bufsize = Math.max(240000, Math.round(bitrateBps / 30));
-  const gop = Math.max(15, Math.round(f / 2));
+  // Plan «Internet», V3, medido el 2026-11-14 (fuente sintética 1080p45 con texto en
+  // desplazamiento, SSIM por fotograma): con IDR cada 0,5 s y un búfer de un solo fotograma el
+  // IDR no cabía y la imagen «latía»; SSIM mínimo 0,960 a 10 Mbps. Con IDR cada 2 s, búfer de
+  // 150 ms, preset p4 y AQ espacial: 0,995 a 10 Mbps y 0,987 a 4 Mbps (mejor que lo viejo a
+  // 10 Mbps), a 3,7× tiempo real. El coste: el vídeo tarda hasta 2 s más en arrancar.
+  const bufsize = Math.max(240000, Math.round(bitrateBps * 0.15));
+  const gop = f * 2;
   const port = Math.max(1024, Math.min(65535, Number(rtpPort) || 5004));
 
   return [
     '-c:v', 'h264_nvenc',
-    '-preset', 'p1',
+    '-preset', 'p4',
     '-tune', 'ull',
+    '-spatial-aq', '1',
     '-rc', 'cbr',
     '-b:v', String(bitrateBps),
     '-maxrate', String(bitrateBps),
@@ -399,10 +406,22 @@ function normalizeMjpegQ(quality, defaultQ) {
   return defaultQ;
 }
 
-function jpegStreamArgs({ index = 0, fps = 10, quality = 8 } = {}) {
+// Respaldo JPEG (sin WebRTC). El contrato de la plataforma usa la calidad 0–100 de un JPEG
+// normal (Linux se la pasa a `grim -q`); ffmpeg/mjpeg usa una escala inversa 2–31. Antes se
+// descartaba en silencio cualquier valor fuera de 2–31 y se cambiaban 30 FPS por 10. Ahora la
+// conversión es explícita: 48 → q 7, y los FPS se recortan a un tope (cada imagen viaja entera
+// por el túnel; más de 12 por segundo sólo llena la cola del navegador).
+const JPEG_MAX_FPS = 12;
+function calidadJpegAMjpeg(calidad) {
+  const n = Number(calidad);
+  if (!Number.isFinite(n)) return 7;
+  return Math.max(2, Math.min(31, Math.round(2 + (100 - Math.max(0, Math.min(100, n))) / 10)));
+}
+
+function jpegStreamArgs({ index = 0, fps = JPEG_MAX_FPS, quality = 48 } = {}) {
   const outIdx = Math.max(0, Number(index) || 0);
-  const targetFps = Math.max(1, Math.min(15, Number(fps) === 30 ? 10 : (Number(fps) || 10)));
-  const qv = normalizeMjpegQ(quality, 8);
+  const targetFps = Math.max(1, Math.min(JPEG_MAX_FPS, Math.round(Number(fps) || JPEG_MAX_FPS)));
+  const qv = calidadJpegAMjpeg(quality);
 
   return [
     '-hide_banner',
@@ -614,6 +633,7 @@ function superviseRawVideo({
 
 module.exports = {
   GPU_CHAINS,
+  ESCALERA_KBPS,
   FrameAligner,
   superviseRawVideo,
   findFfmpeg,
@@ -630,6 +650,8 @@ module.exports = {
   selectAndProbeGpuChain,
   invalidateGpuChainCache,
   jpegStreamArgs,
+  calidadJpegAMjpeg,
+  JPEG_MAX_FPS,
   screenshotArgs,
   JpegSplitter
 };

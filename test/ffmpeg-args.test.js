@@ -24,14 +24,15 @@ test('ffmpeg-args: dimensiones y bitrates de perfiles 720p, 900p y 1080p coincid
 
 test('ffmpeg-args: argumentos de cada cadena GPU para 720p/900p/1080p y 30/45/60 FPS', () => {
   const profiles = [
-    { height: 720, width: 1280, bitrateBps: 4500000, bufsize: 240000 },
-    { height: 900, width: 1600, bitrateBps: 7000000, bufsize: Math.round(7000000 / 30) },
-    { height: 1080, width: 1920, bitrateBps: 10000000, bufsize: Math.round(10000000 / 30) }
+    { height: 720, width: 1280, bitrateBps: 4500000, bufsize: 675000 },
+    { height: 900, width: 1600, bitrateBps: 7000000, bufsize: 1050000 },
+    { height: 1080, width: 1920, bitrateBps: 10000000, bufsize: 1500000 }
   ];
   const fpsList = [
-    { fps: 30, gop: 15 },
-    { fps: 45, gop: Math.max(15, Math.round(45 / 2)) },
-    { fps: 60, gop: 30 }
+    // IDR cada 2 s (plan «Internet», V3).
+    { fps: 30, gop: 60 },
+    { fps: 45, gop: 90 },
+    { fps: 60, gop: 120 }
   ];
 
   const monitor = { index: 1, x: 1920, y: -88, width: 1920, height: 1080 };
@@ -61,12 +62,13 @@ test('ffmpeg-args: argumentos de cada cadena GPU para 720p/900p/1080p y 30/45/60
           return idx >= 0 ? args[idx + 1] : null;
         };
 
-        assert.equal(getFlag('-preset'), 'p1');
+        assert.equal(getFlag('-preset'), 'p4');
         assert.equal(getFlag('-tune'), 'ull');
+        assert.equal(getFlag('-spatial-aq'), '1');
         assert.equal(getFlag('-rc'), 'cbr');
         assert.equal(getFlag('-b:v'), String(p.bitrateBps));
         assert.equal(getFlag('-maxrate'), String(p.bitrateBps));
-        assert.equal(getFlag('-bufsize'), String(Math.max(240000, p.bufsize)));
+        assert.equal(getFlag('-bufsize'), String(p.bufsize));
         assert.equal(getFlag('-g'), String(f.gop));
         assert.equal(getFlag('-bf'), '0');
         assert.equal(getFlag('-forced-idr'), '1');
@@ -131,4 +133,26 @@ test('ffmpeg-args: la cadena recordada sólo vale con la misma versión de ffmpe
   assert.equal(cadenaRecordada({ ...base, isNativeRes: true, candidates: ['d3d11-native', 'cpu-scale'], saved: vigente }), 'd3d11-native');
   assert.equal(cadenaRecordada({ ...base, isNativeRes: true, saved: vigente }), null);
   assert.equal(cadenaRecordada({ ...base, saved: null }), null);
+});
+
+test('ffmpeg-args: el bitrate pedido por el cliente manda sobre el ligado a la altura y el búfer es de 150 ms', () => {
+  const args = gpuStreamArgs({ chain: 'd3d11-native', fps: 30, height: 1080, bitrateKbps: 2500 });
+  const flag = nombre => args[args.indexOf(nombre) + 1];
+  assert.equal(flag('-b:v'), '2500000');
+  assert.equal(flag('-maxrate'), '2500000');
+  assert.equal(flag('-bufsize'), '375000');
+  // Con bitrates muy bajos el búfer no baja de 240 kbit (un IDR de 720p tiene que caber).
+  assert.equal(gpuStreamArgs({ chain: 'd3d11-native', height: 720, bitrateKbps: 1500 })[gpuStreamArgs({ chain: 'd3d11-native', height: 720, bitrateKbps: 1500 }).indexOf('-bufsize') + 1], '240000');
+});
+
+test('ffmpeg-args: el respaldo JPEG convierte la calidad 0–100 del contrato y recorta los FPS a la vista', () => {
+  const { jpegStreamArgs, calidadJpegAMjpeg, JPEG_MAX_FPS } = require('../platform/windows/ffmpeg');
+  // server.js pide { fps: 30, quality: 48 } (lo mismo que en Linux, donde 48 va a `grim -q`).
+  const args = jpegStreamArgs({ index: 0, fps: 30, quality: 48 });
+  assert.equal(args[args.indexOf('-q:v') + 1], '7');
+  assert.match(args[args.indexOf('-i') + 1], new RegExp(`framerate=${JPEG_MAX_FPS}:`));
+  assert.equal(jpegStreamArgs({ fps: 5 })[jpegStreamArgs({ fps: 5 }).indexOf('-i') + 1].includes('framerate=5:'), true);
+  assert.equal(calidadJpegAMjpeg(100), 2);
+  assert.equal(calidadJpegAMjpeg(0), 12);
+  assert.equal(calidadJpegAMjpeg('x'), 7);
 });

@@ -21,6 +21,8 @@ const { crearEstaticos, crearPlantilla } = require('./lib/estaticos');
 const { atomicWriteJson, cookieValue, safeDecode } = require('./lib/safe');
 const { DEFAULT_MAX_AGE_MS, SessionStore, authPath, loadAuth, verifyAuthAsync } = require('./auth-manager');
 const { DEFAULT_DEVICE_MAX_AGE_MS, DeviceStore, consumePairingAsync } = require('./device-manager');
+const { crearRegistroTransporte, normalizarRuta } = require('./lib/registro-transporte');
+const { validarPerfil, leerPerfil, mismoPerfil } = require('./lib/perfil-gpu');
 
 const host = process.env.REMOTE_KEYBOARD_HOST || '0.0.0.0';
 const port = Number(process.env.REMOTE_KEYBOARD_PORT || 8765);
@@ -127,13 +129,19 @@ function recordDiagnostic(type, status = 'ok', transport = 'http') {
   if (diagnosticEvents.length > 100) diagnosticEvents.splice(0, diagnosticEvents.length - 100);
 }
 
-function auditAccess(type, status, label = '') {
+function escribirAcceso(linea) {
   try {
     if (fs.existsSync(accessLogPath) && fs.statSync(accessLogPath).size > 256 * 1024) fs.renameSync(accessLogPath, `${accessLogPath}.1`);
-    fs.appendFileSync(accessLogPath, JSON.stringify({ at: new Date().toISOString(), type, status, label: String(label).slice(0, 60) }) + '\n', { mode: 0o600 });
+    fs.appendFileSync(accessLogPath, JSON.stringify(linea) + '\n', { mode: 0o600 });
     fs.chmodSync(accessLogPath, 0o600);
   } catch {}
 }
+
+function auditAccess(type, status, label = '') {
+  escribirAcceso({ at: new Date().toISOString(), type, status, label: String(label).slice(0, 60) });
+}
+
+const registroTransporte = crearRegistroTransporte({ escribir: escribirAcceso });
 
 function sanitizeClientDiagnostic(value) {
   const allowedTransport = ['connecting', 'rtc', 'gpu', 'fallback'];
@@ -147,6 +155,9 @@ function sanitizeClientDiagnostic(value) {
     bitrateKbps: Math.max(0, Math.min(1000000, Number(value?.bitrateKbps) || 0)),
     packetLoss: Math.max(0, Math.min(100, Number(value?.packetLoss) || 0)),
     jitterMs: Math.max(0, Math.min(60000, Number(value?.jitterMs) || 0)),
+    ruta: normalizarRuta(value?.ruta),
+    altura: [720, 900, 1080].includes(Number(value?.altura)) ? Number(value.altura) : 0,
+    kbpsPedido: Math.max(0, Math.min(100000, Number(value?.kbpsPedido) || 0)),
     monitor: monitor.name,
     keyboardLock: allowedKeyboard.includes(value?.keyboardLock) ? value.keyboardLock : 'not-requested',
     audio: Boolean(value?.audio),
@@ -308,9 +319,8 @@ async function sessionOptions() {
 
 function readGpuProfile() {
   try {
-    const value = JSON.parse(fs.readFileSync(gpuProfilePath, 'utf8'));
-    const fps = Number(value.fps), height = Number(value.height);
-    if ([30, 45, 60].includes(fps) && [720, 900, 1080].includes(height)) return { fps, height };
+    const perfil = leerPerfil(JSON.parse(fs.readFileSync(gpuProfilePath, 'utf8')));
+    if (perfil) return perfil;
   } catch {}
   return { fps: 60, height: 1080 };
 }
@@ -963,7 +973,12 @@ function manejarPeticion(req, res) {
       req.setEncoding('utf8');
       req.on('data', chunk => { if ((body += chunk).length > 4096) req.destroy(); });
       req.on('end', () => {
-        try { clientDiagnostic = sanitizeClientDiagnostic(JSON.parse(body)); json(res, 200, { ok: true }); }
+        try {
+          clientDiagnostic = sanitizeClientDiagnostic(JSON.parse(body));
+          // Una línea por cambio de transporte: dice después si una sesión remota fue vídeo directo o respaldo.
+          if (device) registroTransporte.registrar(device.id, { label: device.label, origen: loginKey(req).startsWith('remoto:') ? 'remoto' : 'lan', diagnostico: clientDiagnostic });
+          json(res, 200, { ok: true });
+        }
         catch { json(res, 400, { error: 'Diagnóstico inválido' }); }
       });
       return;
@@ -974,12 +989,10 @@ function manejarPeticion(req, res) {
       req.on('data', chunk => { if ((body += chunk).length > 2048) req.destroy(); });
       req.on('end', () => {
         try {
-          const profile = JSON.parse(body);
-          const fps = Number(profile.fps), height = Number(profile.height);
-          if (![30, 45, 60].includes(fps) || ![720, 900, 1080].includes(height)) throw new Error('Perfil GPU inválido');
-          const current = readGpuProfile();
-          if (current.fps !== fps || current.height !== height) atomicWriteJson(gpuProfilePath, { fps, height }, 0o600);
-          json(res, 200, { ok: true, fps, height });
+          // `kbps` es opcional: un cliente viejo sigue mandando sólo fps y altura.
+          const profile = validarPerfil(JSON.parse(body));
+          if (!mismoPerfil(readGpuProfile(), profile)) atomicWriteJson(gpuProfilePath, profile, 0o600);
+          json(res, 200, { ok: true, ...profile });
         } catch (error) { json(res, 400, { error: error.message }); }
       });
       return;
