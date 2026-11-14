@@ -35,6 +35,7 @@ type bridge struct {
 	outTimestamp uint32
 	outSequence  uint16
 	frameStep    uint32
+	tunel        *tunelH264
 }
 
 func newBridge() (*bridge, error) {
@@ -53,7 +54,7 @@ func newBridge() (*bridge, error) {
 	if err != nil || (fps != 30 && fps != 45 && fps != 60) {
 		fps = 60
 	}
-	return &bridge{track: track, peers: make(map[*webrtc.PeerConnection]struct{}), frameStep: uint32(90000 / fps)}, nil
+	return &bridge{track: track, peers: make(map[*webrtc.PeerConnection]struct{}), frameStep: uint32(90000 / fps), tunel: nuevoTunelH264()}, nil
 }
 
 func (b *bridge) readRTP(address string) error {
@@ -98,6 +99,8 @@ func (b *bridge) readRTP(address string) error {
 		if err := b.track.WriteRTP(safePacket); err != nil && !errors.Is(err, io.ErrClosedPipe) {
 			log.Printf("RTP: %v", err)
 		}
+		// El mismo vídeo, en fotogramas completos, para quien lo recibe por el túnel (tunel.go).
+		b.tunel.paquete(&packet, packet.Timestamp)
 		if packet.Marker {
 			b.frames.Add(1)
 			b.outTimestamp += b.frameStep
@@ -207,10 +210,15 @@ func (b *bridge) stats(w http.ResponseWriter, _ *http.Request) {
 	b.mu.Lock()
 	peers := len(b.peers)
 	b.mu.Unlock()
+	// Quien ve el vídeo por el túnel también cuenta: sin esto gpu-stream dejaría de capturar a
+	// los 60 s creyendo que no hay nadie mirando.
+	tunel := b.tunel.cuantos()
+	peers += tunel
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"ok":      true,
 		"peers":   peers,
+		"tunel":   tunel,
 		"packets": b.packets.Load(),
 		"bytes":   b.bytes.Load(),
 		"frames":  b.frames.Load(),
@@ -241,6 +249,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/offer", b.offer)
 	mux.HandleFunc("/ice-test", b.probarIce)
+	mux.HandleFunc("/h264", b.tunel.servir)
 	mux.HandleFunc("/health", b.stats)
 	mux.HandleFunc("/stats", b.stats)
 	server := &http.Server{Addr: net.JoinHostPort("127.0.0.1", webRTCPort), Handler: mux, ReadHeaderTimeout: 3 * time.Second}

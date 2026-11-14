@@ -206,7 +206,7 @@ Test-Seccion 'Red y conexión' {
         $cuenta = { param($t) @($lineas | Where-Object { $_.transport -eq $t }).Count }
         $remotoRespaldo = @($lineas | Where-Object { $_.transport -eq 'fallback' -and $_.origen -eq 'remoto' }).Count
         $relay = @($lineas | Where-Object { $_.ruta -match 'relay' }).Count
-        $detalle = "últimas $($lineas.Count): GPU $(& $cuenta 'gpu') · CPU $(& $cuenta 'rtc') · respaldo $(& $cuenta 'fallback') (por Internet $remotoRespaldo) · por TURN $relay"
+        $detalle = "últimas $($lineas.Count): GPU $(& $cuenta 'gpu') · CPU $(& $cuenta 'rtc') · vídeo por túnel $(& $cuenta 'tunel') · JPEG $(& $cuenta 'fallback') (por Internet $remotoRespaldo) · por TURN $relay"
         $estadoVideo = if ($remotoRespaldo -gt 0 -and $proveedor -eq 'ninguno') { 'AVISO' } else { 'OK' }
         if ($estadoVideo -eq 'AVISO') { $detalle += ' → activa un TURN (panel → Conexión)' }
         Add-Check 'vídeo de las últimas sesiones' $estadoVideo $detalle

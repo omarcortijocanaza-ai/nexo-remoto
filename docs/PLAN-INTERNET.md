@@ -171,6 +171,29 @@ se cierra igual y esta verificación queda anotada como pendiente 👤.
   «Datos», línea `transporte` en el registro.
 - Bitácora, commit(s) `I1: …`, etiqueta `i1-ok`, push de rama y etiqueta.
 
+## 2b. Fase I1b · Vídeo GPU por el túnel (añadida el 2026-11-14 a pedido del dueño)
+
+El dueño prefirió no registrar tarjeta para el TURN de Cloudflare. Sin TURN, el cliente que no
+consigue WebRTC directo caía a JPEG. Esta fase cambia ese respaldo por el mismo H.264 de NVENC:
+
+```
+ffmpeg (NVENC) ─RTP─▶ puente Pion ─ GET /h264 (fotogramas completos) ─▶ server.js
+   ─ WebSocket /gpu-live (por el túnel de Cloudflare) ─▶ navegador: WebCodecs VideoDecoder → canvas
+```
+
+- `gpu-webrtc/tunel.go`: reagrupa los RTP en fotogramas Annex B; cada suscriptor empieza en un
+  fotograma clave y, si su cola se llena, descarta hasta el siguiente. Cuenta como «par» para que
+  la captura no se duerma.
+- `lib/tunel-video.js`: reenvía a cada WebSocket; si el socket acumula más de 256 KB sin enviar
+  descarta hasta el siguiente clave (el túnel es TCP: acumular sería retraso, no fluidez). Manda
+  enviados/descartados cada 2 s y contesta un eco para medir el retraso real.
+- `index.html`: el respaldo intenta primero `/gpu-live` (si hay WebCodecs); si en 9 s no muestra
+  nada, o el decodificador falla, usa los JPEG y reintenta el túnel al minuto. La calidad
+  automática usa los descartes como «pérdida». Estado «En vivo · túnel»; transporte `tunel` en el
+  diagnóstico, el registro y el doctor.
+- Linux: el puente y `server.js` son compartidos; lo nuevo es aditivo y sólo se usa si el cliente
+  lo pide. Se verifica en la fase L.
+
 ## 3. Fase I2 · Dirección fija `nexo.nexussoftware.pe`
 
 Cómo publican hoy las otras aplicaciones del dueño (verificado en `D:\NexusSoftwareWeb\nexus-software\docs\ORACLE.md`
@@ -404,3 +427,27 @@ en Linux esa `quality` va a `grim -q` (escala 0–100) y 7 hundiría la imagen. 
   navegador integrado de esta prueba; se puede revocar desde Diagnóstico.
 
 Dudas: ninguna que bloquee. Etiqueta `i1-ok`.
+
+### I1b · 2026-11-14 · Opus 5.5
+
+Hecho según §2b. Verificaciones (NEXO arrancado para las pruebas y detenido al terminar; perfil del
+dueño intacto):
+
+- `go test ./...` en `gpu-webrtc`: pasa (4 pruebas nuevas en `tunel_test.go`: agrupación con FU-A,
+  inicio en clave, descarte con cola llena, flujo HTTP). `node --test`: 160 de 160.
+- Binario: compilado a una carpeta temporal (la bandeja seguía abierta) y copiado sólo
+  `nexo-gpu-webrtc.exe` (el puente no estaba en ejecución).
+- Servidor real con plataforma falsa en un puerto de bucle local, conectado al puente real, cliente
+  WebSocket en `/gpu-live` durante 10 s:
+  ```
+  primer mensaje: clave, Annex B «00 00 00 01 09 10 …» · primer clave a 565 ms
+  45 FPS · 9 987 kbps · 5 claves en 10 s · servidor: enviados 701, descartados 0 · eco 2 ms
+  puente: peers 1 (tunel 1)
+  ```
+- Navegador integrado (Chromium), en la página del propio puente, mismo código del cliente para el
+  códec: `avc1.64002a`, 1920×1080, 307 fotogramas decodificados en 8 s (el primero a 1,2 s), sin
+  errores de WebCodecs.
+
+No verificado (👤): una sesión real por datos móviles a través del túnel de Cloudflare (la sesión
+«Mi PC» pide la contraseña del dueño) y Safari en iPhone (tiene WebCodecs desde iOS 16.4; si su
+decodificador rechazara el flujo, el cliente cae solo a los JPEG).

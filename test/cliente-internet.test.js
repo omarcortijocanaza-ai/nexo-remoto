@@ -58,3 +58,24 @@ test('internet: selector «Uso de datos» con los techos de la escalera', () => 
   const techos = [...html.matchAll(/data-kbps="(\d+)"/g)].map(m => Number(m[1]));
   assert.deepEqual(techos, C.TECHOS);
 });
+
+test('túnel: el respaldo prueba primero el vídeo por WebCodecs y conserva los JPEG como último recurso', () => {
+  assert.match(html, /if\(puedeTunel\(\)\)return conectarTunel\(\);.{0,120}'\/live'\+q/);
+  assert.match(html, /new WebSocket\(scheme\+'\/\/'\+location\.host\+'\/gpu-live'\+q\)/);
+  // Sin WebCodecs (o en la demostración) no se intenta.
+  assert.match(html, /function puedeTunel\(\)\{return!DEMO&&Date\.now\(\)>=tunelFalloHasta&&typeof VideoDecoder==='function'/);
+  // El diagnóstico y el estado distinguen el vídeo por túnel de los JPEG, y el aviso de respaldo no sale con él.
+  assert.match(html, /transport:gpuActive\?'gpu':tunelActivo\?'tunel':transport/);
+  assert.match(html, /'En vivo · túnel'/);
+  assert.match(html, /avisoRespaldoVisto\|\|gpuActive\|\|tunelActivo\|\|/);
+});
+
+test('túnel: el códec se deduce del SPS que llega en cada fotograma clave', () => {
+  const vm = require('node:vm');
+  const fuente = html.match(/function codecDeSps\(d\)\{[^\n]*?return''\}/)[0];
+  const contexto = {};
+  vm.runInNewContext(`${fuente};this.codecDeSps=codecDeSps`, contexto);
+  // SPS de NVENC «high» nivel 4.2: 00 00 00 01 67 64 00 2A …
+  assert.equal(contexto.codecDeSps(new Uint8Array([0, 0, 0, 1, 0x67, 0x64, 0x00, 0x2a, 0xac])), 'avc1.64002a');
+  assert.equal(contexto.codecDeSps(new Uint8Array([0, 0, 1, 0x68, 1, 2, 3, 4])), '');
+});

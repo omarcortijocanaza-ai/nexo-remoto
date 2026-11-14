@@ -23,6 +23,7 @@ const { DEFAULT_MAX_AGE_MS, SessionStore, authPath, loadAuth, verifyAuthAsync } 
 const { DEFAULT_DEVICE_MAX_AGE_MS, DeviceStore, consumePairingAsync } = require('./device-manager');
 const { crearRegistroTransporte, normalizarRuta } = require('./lib/registro-transporte');
 const { validarPerfil, leerPerfil, mismoPerfil } = require('./lib/perfil-gpu');
+const { servirTunel } = require('./lib/tunel-video');
 
 const host = process.env.REMOTE_KEYBOARD_HOST || '0.0.0.0';
 const port = Number(process.env.REMOTE_KEYBOARD_PORT || 8765);
@@ -70,13 +71,15 @@ fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
 const lectorApariencia = aparienciaCliente.crearLector(stateDir);
 const viewers = new Set();
 const wsViewers = new Set();
+// Clientes que reciben el vídeo GPU por el túnel (respaldo con WebCodecs, lib/tunel-video.js).
+const tunelViewers = new Set();
 const audioViewers = new Set();
 const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
 // Los WebSocket del respaldo pueden quedar medio abiertos cuando un teléfono
 // cambia de red o el sistema congela el navegador. Sin latido seguían contando
 // como espectadores y mantenían grim/pw-record activos indefinidamente.
 const websocketHeartbeat = setInterval(() => {
-  for (const socket of [...wsViewers, ...audioViewers]) {
+  for (const socket of [...wsViewers, ...tunelViewers, ...audioViewers]) {
     if (socket.readyState !== 1 || socket.nexoAlive === false) {
       socket.terminate();
       continue;
@@ -144,7 +147,7 @@ function auditAccess(type, status, label = '') {
 const registroTransporte = crearRegistroTransporte({ escribir: escribirAcceso });
 
 function sanitizeClientDiagnostic(value) {
-  const allowedTransport = ['connecting', 'rtc', 'gpu', 'fallback'];
+  const allowedTransport = ['connecting', 'rtc', 'gpu', 'tunel', 'fallback'];
   const allowedKeyboard = ['not-requested', 'granted', 'unsupported', 'denied'];
   const allowedBrowser = ['Chrome', 'Edge', 'Firefox', 'Safari', 'Navegador desconocido'];
   return {
@@ -414,7 +417,7 @@ let keepAwakeTimer = null;
 let currentSecureDesktop = false;
 
 function hasAnyClient() {
-  return Boolean(viewers.size || wsViewers.size || audioViewers.size || rtcHost?.peers?.size);
+  return Boolean(viewers.size || wsViewers.size || tunelViewers.size || audioViewers.size || rtcHost?.peers?.size);
 }
 
 function syncKeepAwake() {
@@ -446,7 +449,7 @@ platform.on('desktop-state', state => {
   const payload = { type: 'secure-desktop', active: currentSecureDesktop };
   rtcHost?.notify(payload);
   const textMsg = JSON.stringify(payload);
-  for (const socket of wsViewers) {
+  for (const socket of [...wsViewers, ...tunelViewers]) {
     if (socket.readyState === 1) {
       try { socket.send(textMsg); } catch {}
     }
@@ -950,7 +953,7 @@ function manejarPeticion(req, res) {
         server: { uptimeMs: Date.now() - startedAt, sessionKind, gpuEnabled, platform: platform.name },
         monitor: { ...monitor },
         rtc: rtcHost.stats(),
-        streams: { jpeg: viewers.size + wsViewers.size, audio: audioViewers.size },
+        streams: { jpeg: viewers.size + wsViewers.size, tunel: tunelViewers.size, audio: audioViewers.size },
         client: clientDiagnostic,
         lastEvent: diagnosticEvents.at(-1) || null,
         recentEvents: diagnosticEvents.slice(-20)
@@ -961,7 +964,7 @@ function manejarPeticion(req, res) {
         generatedAt: new Date().toISOString(),
         server: { uptimeMs: Date.now() - startedAt, sessionKind, gpuEnabled, node: process.version, platform: platform.name },
         monitor: { ...monitor }, rtc: rtcHost.stats(),
-        streams: { jpeg: viewers.size + wsViewers.size, audio: audioViewers.size },
+        streams: { jpeg: viewers.size + wsViewers.size, tunel: tunelViewers.size, audio: audioViewers.size },
         recentEvents: diagnosticEvents.slice(-100), files: { count: listFiles().length },
         auth: { required: authRequired, configured: Boolean(authConfig), sessions: authSessions.list().length }
       };
@@ -1179,9 +1182,27 @@ function manejarUpgrade(req, socket, head) {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const isVideo = url.pathname === '/live';
     const isAudio = url.pathname === '/audio-live';
+    const isTunel = url.pathname === '/gpu-live';
     const paired = Boolean(devices.get(cookieValue(req, deviceCookieName))) || tokenMatches(url.searchParams.get('token'));
-    if ((!isVideo && !isAudio) || !paired || req.headers.upgrade?.toLowerCase() !== 'websocket') return socket.destroy();
+    if ((!isVideo && !isAudio && !isTunel) || !paired || req.headers.upgrade?.toLowerCase() !== 'websocket') return socket.destroy();
     if (authRequired && !requestSession(req)) return socket.destroy();
+    if (isTunel && !gpuEnabled) return socket.destroy(); // el cliente cae entonces al JPEG
+    if (isTunel) {
+      wss.handleUpgrade(req, socket, head, ws => {
+        ws.nexoAlive = true;
+        tunelViewers.add(ws);
+        syncKeepAwake();
+        const quitar = () => { tunelViewers.delete(ws); syncKeepAwake(); };
+        ws.on('pong', () => { ws.nexoAlive = true; });
+        ws.on('close', quitar);
+        ws.on('error', quitar);
+        if (currentSecureDesktop) {
+          try { ws.send(JSON.stringify({ type: 'secure-desktop', active: true })); } catch {}
+        }
+        servirTunel(ws, { puertoPuente: gpuBridgePort, log: mensaje => console.error(mensaje) });
+      });
+      return;
+    }
     wss.handleUpgrade(req, socket, head, ws => {
       const group = isAudio ? audioViewers : wsViewers;
       ws.nexoAlive = true;
